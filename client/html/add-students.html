@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Students - AttendPro</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='20' width='100' height='100'/><path d='M30 50 L45 65 L70 35' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <h3>AttendPro</h3>
+                    <span class="sidebar-badge">Admin</span>
+                </div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="admin-dashboard.html" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    Dashboard
+                </a></li>
+                <li><a href="add-students.html" class="nav-link active">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                    Add Students
+                </a></li>
+                <li><a href="admin-dashboard.html?page=users" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    Manage Users
+                </a></li>
+                <li><a href="admin-dashboard.html?page=students" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
+                    Students List
+                </a></li>
+                <li><a href="admin-dashboard.html?page=faculty" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                    Faculty
+                </a></li>
+                <li><a href="admin-dashboard.html?page=subjects" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                    Subjects
+                </a></li>
+                <li><a href="admin-dashboard.html?page=classes" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                    Classes
+                </a></li>
+                <li><a href="admin-dashboard.html?page=timetable" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    Timetable
+                </a></li>
+                <li><a href="admin-dashboard.html?page=reports" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    Reports
+                </a></li>
+                <li><a href="login.html" class="nav-link logout" id="logoutBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Logout
+                </a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h2 class="page-title">Add Students</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">Admin</span>
+                            <span class="user-role">Admin</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-content">
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="single">Add Single Student</button>
+                        <button class="tab-btn" data-tab="bulk">Bulk Import</button>
+                        <button class="tab-btn" data-tab="scan">Scan ID Card</button>
+                    </div>
+
+                    <div class="tab-content active" id="single">
+                        <div class="form-card">
+                            <h3>Add Single Student</h3>
+                            <form id="addStudentForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="studentName">Full Name *</label>
+                                        <input type="text" id="studentName" required placeholder="Enter student name">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="studentEmail">Email *</label>
+                                        <input type="email" id="studentEmail" required placeholder="student@college.edu">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="studentUniqueId">Unique ID *</label>
+                                        <input type="text" id="studentUniqueId" required placeholder="STU001">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="studentYear">Year *</label>
+                                        <select id="studentYear" required>
+                                            <option value="">Select Year</option>
+                                            <option value="1">1st Year</option>
+                                            <option value="2">2nd Year</option>
+                                            <option value="3">3rd Year</option>
+                                            <option value="4">4th Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="studentDepartment">Department *</label>
+                                        <select id="studentDepartment" required>
+                                            <option value="">Select Department</option>
+                                            <option value="CSE">CSE - Computer Science</option>
+                                            <option value="ECE">ECE - Electronics</option>
+                                            <option value="EEE">EEE - Electrical</option>
+                                            <option value="MECH">MECH - Mechanical</option>
+                                            <option value="CIVIL">CIVIL - Civil</option>
+                                            <option value="IT">IT - Information Technology</option>
+                                            <option value="MCA">MCA - Computer Application</option>
+                                            <option value="MBA">MBA - Business Admin</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="studentBatch">Batch (Optional)</label>
+                                        <select id="studentBatch">
+                                            <option value="">Select Batch</option>
+                                            <option value="A">A</option>
+                                            <option value="B">B</option>
+                                            <option value="C">C</option>
+                                            <option value="D">D</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="studentClass">Assign to Class (Optional)</label>
+                                        <select id="studentClass">
+                                            <option value="">No Class</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-info">
+                                    <p>Default Password: <strong>password</strong></p>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Add Student</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="bulk">
+                        <div class="form-card">
+                            <h3>Bulk Import Students</h3>
+                            <div class="bulk-instructions">
+                                <h4>Instructions:</h4>
+                                <ul>
+                                    <li>Upload a CSV file with columns: name, email, uniqueId, year, department, batch</li>
+                                    <li>Or paste CSV data below</li>
+                                    <li>Default password will be set as "password" for all students</li>
+                                </ul>
+                            </div>
+                            <div class="form-group">
+                                <label>Upload CSV File</label>
+                                <input type="file" id="csvFile" accept=".csv">
+                            </div>
+                            <div class="or-divider"><span>OR</span></div>
+                            <div class="form-group">
+                                <label>Paste CSV Data</label>
+                                <textarea id="csvData" rows="10" placeholder="name,email,uniqueId,year,department,batch
+John Doe,john@edu,STU001,2024,CSE,A
+Jane Smith,jane@edu,STU002,2024,CSE,A"></textarea>
+                            </div>
+                            <button class="btn btn-primary" onclick="processBulkStudents()">Import Students</button>
+                        </div>
+                        <div id="bulkResults" class="results-card" style="display:none;">
+                            <h4>Import Results</h4>
+                            <div id="resultsContent"></div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="scan">
+                        <div class="form-card">
+                            <h3>Scan Student ID Card</h3>
+                            <p>Scan the student's ID card to auto-fill their details</p>
+                            <div id="scannerContainer" style="margin: 20px 0;">
+                                <div id="reader" style="width: 100%; max-width: 400px; margin: 0 auto;"></div>
+                                <button class="btn btn-primary" id="startScanBtn" onclick="startScanner()">📷 Start Camera</button>
+                                <button class="btn btn-danger" id="stopScanBtn" onclick="stopScanner()" style="display:none;">Stop Camera</button>
+                            </div>
+                            <div id="scanResult" class="scan-result" style="display:none;">
+                                <h4>Student Found!</h4>
+                                <div id="scannedData"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let currentUser = checkAuth();
+        let classes = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!currentUser || currentUser.role !== 'admin') {
+                window.location.href = 'login.html';
+                return;
+            }
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userAvatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            
+            await loadClasses();
+            setupTabs();
+            setupLogout();
+        });
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function setupTabs() {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById(btn.dataset.tab).classList.add('active');
+                });
+            });
+        }
+
+        function setupLogout() {
+            document.getElementById('logoutBtn').addEventListener('click', (e) => {
+                e.preventDefault();
+                clearAuth();
+                window.location.href = 'login.html';
+            });
+        }
+
+        async function loadClasses() {
+            try {
+                const data = await api.get('/classes');
+                classes = data.classes;
+                const classSelect = document.getElementById('studentClass');
+                classSelect.innerHTML = '<option value="">No Class</option>' +
+                    classes.map(c => `<option value="${c._id}">${c.className} - ${c.department} ${c.year}</option>`).join('');
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        document.getElementById('addStudentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentData = {
+                name: document.getElementById('studentName').value,
+                email: document.getElementById('studentEmail').value,
+                uniqueId: document.getElementById('studentUniqueId').value,
+                year: document.getElementById('studentYear').value,
+                department: document.getElementById('studentDepartment').value,
+                batch: document.getElementById('studentBatch').value,
+                assignedClass: document.getElementById('studentClass').value || null
+            };
+
+            try {
+                await api.post('/auth/students/add', studentData);
+                alert('Student added successfully! Default password: password');
+                document.getElementById('addStudentForm').reset();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        async function processBulkStudents() {
+            let students = [];
+            
+            const fileInput = document.getElementById('csvFile');
+            if (fileInput.files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const csv = e.target.result;
+                    students = parseCSV(csv);
+                    await bulkImport(students);
+                };
+                reader.readAsText(fileInput.files[0]);
+            } else {
+                const csvData = document.getElementById('csvData').value;
+                if (!csvData.trim()) {
+                    alert('Please upload a CSV file or paste CSV data');
+                    return;
+                }
+                students = parseCSV(csvData);
+                await bulkImport(students);
+            }
+        }
+
+        function parseCSV(csv) {
+            const lines = csv.trim().split(/\r?\n/);
+            if (lines.length < 2) return [];
+            
+            // Parse header - keep exactly as is, just lowercase
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            
+            console.log('CSV Headers:', headers);
+            console.log('First data line:', lines[1]);
+            
+            const students = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                
+                // Split by comma
+                const values = lines[i].split(',').map(v => v.trim());
+                
+                console.log('Line values:', values);
+                
+                const student = {};
+                headers.forEach((h, idx) => {
+                    student[h] = values[idx] || '';
+                });
+                
+                // Convert year to number
+                if (student.year) {
+                    student.year = parseInt(student.year);
+                }
+                
+                console.log('Parsed student object:', student);
+                
+                students.push(student);
+            }
+            return students;
+        }
+
+        async function bulkImport(students) {
+            try {
+                const result = await api.post('/auth/students/bulk', { students });
+                
+                document.getElementById('bulkResults').style.display = 'block';
+                const resultsContent = document.getElementById('resultsContent');
+                
+                let html = `<p class="success">Successfully added: ${result.results.success.length} students</p>`;
+                if (result.results.failed.length > 0) {
+                    html += `<p class="error">Failed: ${result.results.failed.length}</p>`;
+                    html += '<ul>';
+                    result.results.failed.forEach(f => {
+                        html += `<li>${f.email}: ${f.reason}</li>`;
+                    });
+                    html += '</ul>';
+                }
+                resultsContent.innerHTML = html;
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Scanner functions
+        let html5QrCode = null;
+
+        async function startScanner() {
+            document.getElementById('startScanBtn').style.display = 'none';
+            document.getElementById('stopScanBtn').style.display = 'inline-block';
+            
+            try {
+                html5QrCode = new Html5Qrcode("reader");
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 150 } },
+                    (decodedText) => {
+                        processScannedData(decodedText);
+                    },
+                    () => {}
+                );
+            } catch (err) {
+                alert('Camera error: ' + err);
+                document.getElementById('startScanBtn').style.display = 'inline-block';
+                document.getElementById('stopScanBtn').style.display = 'none';
+            }
+        }
+
+        async function stopScanner() {
+            if (html5QrCode) {
+                await html5QrCode.stop();
+                html5QrCode = null;
+            }
+            document.getElementById('startScanBtn').style.display = 'inline-block';
+            document.getElementById('stopScanBtn').style.display = 'none';
+        }
+
+        function processScannedData(data) {
+            try {
+                const studentData = JSON.parse(data);
+                document.getElementById('studentName').value = studentData.name || '';
+                document.getElementById('studentEmail').value = studentData.email || '';
+                document.getElementById('studentUniqueId').value = studentData.uniqueId || '';
+                document.getElementById('studentYear').value = studentData.year || '';
+                document.getElementById('studentDepartment').value = studentData.department || '';
+                document.getElementById('studentBatch').value = studentData.batch || '';
+                
+                document.getElementById('scanResult').style.display = 'block';
+                document.getElementById('scannedData').innerHTML = `
+                    <p><strong>Name:</strong> ${studentData.name}</p>
+                    <p><strong>Email:</strong> ${studentData.email}</p>
+                    <p><strong>Unique ID:</strong> ${studentData.uniqueId}</p>
+                    <p><strong>Year:</strong> ${studentData.year}</p>
+                    <p><strong>Department:</strong> ${studentData.department}</p>
+                `;
+                
+                stopScanner();
+                document.querySelector('[data-tab="single"]').click();
+            } catch (err) {
+                alert('Invalid QR code data');
+            }
+        }
+    </script>
+</body>
+</html>

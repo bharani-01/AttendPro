@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - AttendPro</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='20' width='100' height='100'/><path d='M30 50 L45 65 L70 35' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+    <script src="../js/vendor/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <h3>AttendPro</h3>
+                    <span class="sidebar-badge">Student</span>
+                </div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#" class="nav-link active" data-page="overview">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    Dashboard
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="attendance">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    My Attendance
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="daily">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Daily Logs
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="leave">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Leave Request
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="checkin">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    QR Check-in
+                </a></li>
+                <li><a href="messages.html" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                    Messages
+                </a></li>
+                <li><a href="#" class="nav-link logout" id="logoutBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Logout
+                </a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h2 class="page-title" id="pageTitle">My Dashboard</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-avatar" id="userAvatar">S</div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">Student</span>
+                            <span class="user-role">Student</span>
+                        </div>
+                        <div class="dropdown-content" id="userMenuDropdown">
+                            <a href="profile.html">Profile</a>
+                            <a href="#" id="logoutBtnDropdown">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div id="pageContent">
+                <div class="page-section active" id="overview">
+                    <div class="attendance-alert" id="attendanceAlert" style="display:none;">
+                        <div class="alert-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </div>
+                        <div class="alert-content">
+                            <h4>Attendance Alert!</h4>
+                            <p id="alertMessage">Your overall attendance is below 75%.</p>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-card-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            </div>
+                            <h3>Overall Attendance</h3>
+                            <p class="stat-number" id="overallAttendance">0%</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="overallProgress" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-icon green">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
+                            </div>
+                            <h3>Total Classes</h3>
+                            <p class="stat-number" id="totalClasses">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                            </div>
+                            <h3>Present</h3>
+                            <p class="stat-number" id="totalPresent">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-icon red">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                            </div>
+                            <h3>Absent</h3>
+                            <p class="stat-number" id="totalAbsent">0</p>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Subject-wise Attendance</h3>
+                            <canvas id="subjectChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Attendance Distribution</h3>
+                            <canvas id="attendancePieChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="subject-summary">
+                        <h3 class="section-title" style="margin-bottom: 20px;">Subject Details</h3>
+                        <div id="subjectSummaryList"></div>
+                    </div>
+                </div>
+
+                <div class="page-section" id="attendance">
+                    <div class="section-header">
+                        <h3 class="section-title">Subject-wise Attendance</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="subjectAttendanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Subject Code</th>
+                                    <th>Total Classes</th>
+                                    <th>Present</th>
+                                    <th>Absent</th>
+                                    <th>Attendance %</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="page-section" id="daily">
+                    <div class="section-header">
+                        <h3 class="section-title">Daily Attendance Logs</h3>
+                    </div>
+                    <div class="history-filters">
+                        <select id="dailySubject">
+                            <option value="">All Subjects</option>
+                        </select>
+                        <input type="date" id="dailyStartDate">
+                        <input type="date" id="dailyEndDate">
+                        <button class="btn btn-primary" onclick="loadDailyLogs()">Filter</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="dailyLogsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Period</th>
+                                    <th>Subject</th>
+                                    <th>Class</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="page-section" id="leave">
+                    <div class="section-header">
+                        <h3 class="section-title">Request Leave</h3>
+                    </div>
+                    <form id="leaveRequestForm" class="leave-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="leaveSubject">Subject</label>
+                                <select id="leaveSubject" required>
+                                    <option value="">Select Subject</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="leaveDate">Date</label>
+                                <input type="date" id="leaveDate" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="leavePeriod">Period (Optional)</label>
+                                <select id="leavePeriod">
+                                    <option value="">Full Day</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="leaveReason">Reason</label>
+                            <textarea id="leaveReason" rows="3" required placeholder="Enter reason for leave"></textarea>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="submitLeaveRequest()">Submit Request</button>
+                    </form>
+
+                    <h4 class="section-title" style="margin-top: 30px;">My Leave Requests</h4>
+                    <div class="table-container">
+                        <table id="myLeaveRequestsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Subject</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="page-section" id="checkin">
+                    <div class="section-header">
+                        <h3 class="section-title">QR Code Check-in</h3>
+                    </div>
+                    <div class="qr-checkin-container">
+                        <div id="scanSection">
+                            <div id="scan-options" class="scan-options" style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px;">
+                                <button class="btn btn-primary" id="startScanBtn">📷 Scan QR Code</button>
+                                <button class="btn btn-secondary" onclick="showManualEntry()">⌨️ Enter Code Manually</button>
+                            </div>
+                            
+                            <div id="scannerContainer" style="display:none;">
+                                <div id="reader" style="width: 100%; max-width: 400px; margin: 0 auto;"></div>
+                                <button class="btn btn-danger" id="stopScanBtn" style="display:none; margin-top: 16px;">Stop Camera</button>
+                            </div>
+                        </div>
+
+                        <div id="manualSection" style="display:none; margin-top: 20px;">
+                            <div class="form-group">
+                                <label for="checkinCode">Enter Session ID:</label>
+                                <input type="text" id="checkinCode" placeholder="Paste session ID here">
+                            </div>
+                            <button class="btn btn-primary" onclick="fetchSession()">Verify</button>
+                            <button class="btn btn-secondary" onclick="showScanSection()">Back to Scanner</button>
+                        </div>
+
+                        <div id="sessionInfo" class="session-info" style="display:none; margin-top: 20px;">
+                            <div class="session-card">
+                                <h4>Class Information</h4>
+                                <div class="session-details">
+                                    <p><strong>Class:</strong> <span id="sessionClassName"></span></p>
+                                    <p><strong>Subject:</strong> <span id="sessionSubjectName"></span></p>
+                                    <p><strong>Faculty:</strong> <span id="sessionFacultyName"></span></p>
+                                    <p><strong>Period:</strong> <span id="sessionPeriod"></span></p>
+                                    <p><strong>Date:</strong> <span id="sessionDate"></span></p>
+                                    <p><strong>Expires:</strong> <span id="sessionExpires"></span></p>
+                                </div>
+                                <div id="sessionStatus" class="session-status"></div>
+                                <button id="checkinBtn" class="btn btn-success" onclick="submitQRCheckin()">Check In Now</button>
+                            </div>
+                        </div>
+
+                        <div id="checkinMessage" class="checkin-message"></div>
+                    </div>
+                </div>
+
+                <div class="timetable-widget">
+                        <h3>Today's Schedule</h3>
+                        <div id="today-schedule">
+                            <!-- Today's schedule will be loaded here -->
+                        </div>
+                    </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Attendance Details</h3>
+                <button class="close-modal" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/student.js"></script>
+</body>
+</html>

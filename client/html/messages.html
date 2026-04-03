@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages - Attendance App</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <h3>AttendPro</h3>
+                </div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#" id="dashboard-link" class="nav-link">
+                    <i class="fas fa-home"></i> Dashboard
+                </a></li>
+                <li><a href="messages.html" class="nav-link active">
+                    <i class="fas fa-comments"></i> Messages
+                </a></li>
+                <li><a href="#" class="nav-link logout" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a></li>
+            </ul>
+        </nav>
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('active')">
+                         <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="page-title">Messages</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-avatar" id="userAvatar"><i class="fas fa-user-circle"></i></div>
+                        <div class="user-info">
+                            <span class="user-name">User</span>
+                        </div>
+                        <div class="dropdown-content" id="userMenuDropdown">
+                            <a href="profile.html">Profile</a>
+                            <a href="#" id="logoutBtnDropdown">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <div id="pageContent">
+                <div class="page-section active">
+                    <div class="messaging-container">
+                    <div class="conversations-list">
+                        <div class="list-header">
+                            <h2>Conversations</h2>
+                             <button id="new-message-btn" class="btn btn-icon" title="New Conversation">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                                <div class="search-bar">
+                           <input type="text" id="conversation-search" class="form-control" placeholder="Search conversations...">
+                        </div>
+                        <div id="conversation-items">
+                            <!-- Conversation items will be loaded here -->
+                        </div>
+                    </div>
+                    <div class="chat-window">
+                        <div id="chat-placeholder" class="chat-placeholder">
+                            <p>Select a conversation to start chatting.</p>
+                        </div>
+                        <div id="chat-area" class="hidden">
+                            <div class="chat-header">
+                                <h3 id="chat-with-name"></h3>
+                            </div>
+                            <div id="message-list" class="message-list">
+                                <!-- Messages will be loaded here -->
+                            </div>
+                            <div class="message-input">
+                                <textarea id="message-text" placeholder="Type your message..."></textarea>
+                                <button id="send-message-btn" class="btn btn-success">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Message Modal -->
+    <div id="newMessageModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Start a New Conversation</h2>
+            <div class="form-group">
+                <label for="user-search">Search user by Name or ID:</label>
+                <input type="text" id="user-search" class="form-control" placeholder="Search...">
+                <div id="search-results" class="search-results-list">
+                    <!-- Search results will be added here -->
+                </div>
+            </div>
+            <!-- Hidden input to store selected user ID -->
+            <input type="hidden" id="selected-recipient-id">
+            <input type="hidden" id="selected-recipient-name">
+            
+            <button id="start-conversation-btn" class="btn btn-primary" disabled>Start Conversation</button>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="../js/messages.js"></script>
+</body>
+</html>

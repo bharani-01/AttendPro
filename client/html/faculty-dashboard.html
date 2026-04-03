@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty Dashboard - AttendPro</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232563EB' rx='20' width='100' height='100'/><path d='M30 50 L45 65 L70 35' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+    <script src="../js/vendor/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <h3>AttendPro</h3>
+                    <span class="sidebar-badge">Faculty</span>
+                </div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#" class="nav-link active" data-page="overview">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    Dashboard
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="timetable">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    My Timetable
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="mark">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Mark Attendance
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="history">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Attendance History
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="qrcode">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    QR Code Check-in
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="analytics">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    Analytics
+                </a></li>
+                <li><a href="#" class="nav-link" data-page="leaves">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    Leave Requests
+                </a></li>
+                <li><a href="messages.html" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                    Messages
+                </a></li>
+                <li><a href="#" class="nav-link logout" id="logoutBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Logout
+                </a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h2 class="page-title" id="pageTitle">Dashboard</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-avatar" id="userAvatar">F</div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">Faculty</span>
+                            <span class="user-role">Faculty</span>
+                        </div>
+                        <div class="dropdown-content" id="userMenuDropdown">
+                            <a href="profile.html">Profile</a>
+                            <a href="#" id="logoutBtnDropdown">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div id="pageContent">
+                <div class="page-section active" id="overview">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-card-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                            </div>
+                            <h3>Assigned Subjects</h3>
+                            <p class="stat-number" id="assignedSubjects">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-icon green">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            </div>
+                            <h3>Today's Periods</h3>
+                            <p class="stat-number" id="todayPeriods">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-icon orange">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                            </div>
+                            <h3>This Week Classes</h3>
+                            <p class="stat-number" id="weekClasses">0</p>
+                        </div>
+                    </div>
+
+                    <div class="today-timetable">
+                        <h3 class="section-title" style="margin-bottom: 16px;">Today's Timetable</h3>
+                        <div id="todayTimetableList"></div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Weekly Classes</h3>
+                            <canvas id="weeklyClassesChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Attendance Overview</h3>
+                            <canvas id="attendanceOverviewChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-section" id="timetable">
+                    <div class="section-header">
+                        <h3 class="section-title">My Timetable</h3>
+                    </div>
+                    <div class="timetable-container">
+                        <div class="day-selector">
+                            <button class="day-btn active" data-day="Monday">Mon</button>
+                            <button class="day-btn" data-day="Tuesday">Tue</button>
+                            <button class="day-btn" data-day="Wednesday">Wed</button>
+                            <button class="day-btn" data-day="Thursday">Thu</button>
+                            <button class="day-btn" data-day="Friday">Fri</button>
+                            <button class="day-btn" data-day="Saturday">Sat</button>
+                        </div>
+                        <div class="table-container">
+                            <table id="facultyTimetableTable">
+                                <thead>
+                                    <tr>
+                                        <th>Period</th>
+                                        <th>Class</th>
+                                        <th>Subject</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="timetable-widget">
+                        <h3>Today's Schedule</h3>
+                        <div id="today-schedule">
+                            <!-- Today's schedule will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-section" id="mark">
+                    <div class="section-header">
+                        <h3 class="section-title">Mark Attendance</h3>
+                    </div>
+                    <form id="attendanceForm" class="attendance-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="attendanceClass">Class</label>
+                                <select id="attendanceClass" required>
+                                    <option value="">Select Class</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="attendanceSubject">Subject</label>
+                                <select id="attendanceSubject" required>
+                                    <option value="">Select Subject</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="attendanceDate">Date</label>
+                                <input type="date" id="attendanceDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="attendancePeriod">Period</label>
+                                <select id="attendancePeriod" required>
+                                    <option value="">Select Period</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="loadStudentsForAttendance()">Load Students</button>
+                    </form>
+
+                    <div id="studentsList" class="students-attendance-list" style="display:none;">
+                        <div class="section-header">
+                            <h4>Students (<span id="studentsCount">0</span>)</h4>
+                            <div class="bulk-actions">
+                                <button class="btn btn-success btn-small" onclick="markAllPresent()">All Present</button>
+                                <button class="btn btn-danger btn-small" onclick="markAllAbsent()">All Absent</button>
+                            </div>
+                        </div>
+                        <div id="attendanceStudents"></div>
+                        <button type="button" class="btn btn-primary btn-block" style="margin-top: 20px;" onclick="submitAttendance()">Submit Attendance</button>
+                    </div>
+                </div>
+
+                <div class="page-section" id="history">
+                    <div class="section-header">
+                        <h3 class="section-title">Attendance History</h3>
+                    </div>
+                    <div class="history-filters">
+                        <select id="historyClass">
+                            <option value="">Select Class</option>
+                        </select>
+                        <select id="historySubject">
+                            <option value="">Select Subject</option>
+                        </select>
+                        <input type="date" id="historyDate">
+                        <button class="btn btn-primary" onclick="loadAttendanceHistory()">Search</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="historyTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Period</th>
+                                    <th>Class</th>
+                                    <th>Section</th>
+                                    <th>Subject</th>
+                                    <th>Status Summary</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="page-section" id="qrcode">
+                    <div class="section-header">
+                        <h3 class="section-title">QR Code Check-in</h3>
+                    </div>
+                    
+                    <div class="active-sessions" id="activeSessions">
+                        <h4>Active Sessions</h4>
+                        <div id="sessionsList"></div>
+                    </div>
+
+                    <div class="qr-generator-form">
+                        <h4>Create New Session</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="qrClass">Class</label>
+                                <select id="qrClass" required>
+                                    <option value="">Select Class</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="qrSubject">Subject</label>
+                                <select id="qrSubject" required>
+                                    <option value="">Select Subject</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="qrDate">Date</label>
+                                <input type="date" id="qrDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="qrPeriod">Period</label>
+                                <select id="qrPeriod" required>
+                                    <option value="">Select Period</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="qrValidity">Validity (minutes)</label>
+                                <input type="number" id="qrValidity" value="10" min="1" max="60">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="generateQRCode()">Generate QR Code</button>
+                    </div>
+                </div>
+
+                <div class="page-section" id="analytics">
+                    <div class="section-header">
+                        <h3 class="section-title">Attendance Analytics</h3>
+                    </div>
+                    <div class="analytics-filters">
+                        <select id="analyticsClass">
+                            <option value="">Select Class</option>
+                        </select>
+                        <select id="analyticsSubject">
+                            <option value="">Select Subject</option>
+                        </select>
+                        <input type="date" id="analyticsStartDate">
+                        <input type="date" id="analyticsEndDate">
+                        <button class="btn btn-primary" onclick="loadAnalytics()">Load Analytics</button>
+                        <button class="btn btn-secondary" onclick="exportAnalytics('excel')">Export Excel</button>
+                        <button class="btn btn-secondary" onclick="exportAnalytics('pdf')">Export PDF</button>
+                    </div>
+                    <div class="analytics-summary" id="analyticsSummary">
+                        <div class="stat-card">
+                            <h3>Total Classes</h3>
+                            <p class="stat-number" id="totalClassesAnalytics">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Present</h3>
+                            <p class="stat-number text-success" id="presentAnalytics">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Absent</h3>
+                            <p class="stat-number text-danger" id="absentAnalytics">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Attendance %</h3>
+                            <p class="stat-number" id="percentageAnalytics">0%</p>
+                        </div>
+                    </div>
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Attendance by Student</h3>
+                            <canvas id="studentAnalyticsChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Attendance Trends</h3>
+                            <canvas id="trendsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-section" id="leaves">
+                    <div class="section-header">
+                        <h3 class="section-title">Leave Requests</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="leaveRequestsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Student</th>
+                                    <th>Subject</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal()">&times;</button>
+            <h3 class="modal-title" id="modalTitle">Edit Attendance</h3>
+            <div id="modalBody">
+                <!-- Content will be injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="editAttendanceModal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeEditModal()">&times;</button>
+            <h3 class="modal-title">Edit Attendance</h3>
+            <div id="editAttendanceModalBody">
+                <p class="text-center">Select an attendance row to edit students for that section.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/faculty.js"></script>
+</body>
+</html>
