@@ -1,0 +1,62 @@
+# ---- Secrets and environment files ----
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+*.credentials
+*.token
+
+# Key and certificate files
+*.pem
+*.key
+*.p12
+*.crt
+*.cer
+*.jks
+
+# Firebase / Google service config (contains project credentials)
+**/google-services.json
+**/GoogleService-Info.plist
+
+# ---- Node / backend ----
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime logs and temp files
+logs/
+*.log
+*.tmp
+*.temp
+
+# ---- Python ----
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# ---- Flutter / Dart build artifacts ----
+**/.dart_tool/
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.packages
+
+# Generated platform files
+**/android/local.properties
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- App-specific generated/debug files ----
+server/response_times.csv
