@@ -31,7 +31,7 @@ const attendanceSchema = new mongoose.Schema({
     enum: ['present', 'absent', 'late'],
     required: true
   },
-  isModified: {
+  statusModified: {
     type: Boolean,
     default: false
   },

@@ -40,9 +40,6 @@ const PORT = process.env.PORT || 5001;
 
 app.set('trust proxy', 1);
 
-connectDB();
-startRetentionCleanupJob();
-
 const normalizeOrigin = (value) => (value || '').trim().replace(/\/+$/, '');
 
 const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
@@ -432,14 +429,21 @@ app.use((err, req, res, next) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api`);
-  if (allowedOrigins.length) {
-    console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
-  } else {
-    console.log('CORS allowed origins: none configured');
-  }
-});
+async function startServer() {
+  await connectDB();
+  startRetentionCleanupJob();
+
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`API available at http://localhost:${PORT}/api`);
+    if (allowedOrigins.length) {
+      console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
+    } else {
+      console.log('CORS allowed origins: none configured');
+    }
+  });
+}
+
+startServer();
 
 module.exports = app;

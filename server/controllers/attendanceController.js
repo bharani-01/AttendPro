@@ -586,7 +586,7 @@ const attendanceController = {
       
       // If the status was changed, log the modification details
       if (originalStatus !== status) {
-        attendance.isModified = true;
+        attendance.statusModified = true;
         attendance.modifiedBy = req.user._id;
         attendance.modificationReason = modificationReason;
         // Only set originalStatus the first time it's modified

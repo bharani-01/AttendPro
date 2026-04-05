@@ -3,10 +3,13 @@ const mongoose = require('mongoose');
 const connectDB = async () => {
   try {
     const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/attendance_db';
-    
+
+    if (process.env.NODE_ENV === 'production' && !process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is required in production');
+    }
+
     await mongoose.connect(mongoURI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 15000
     });
 
     console.log('MongoDB connected successfully');
