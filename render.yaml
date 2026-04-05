@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: attendpro-web
+    env: node
+    rootDir: server
+    plan: free
+    autoDeploy: true
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000

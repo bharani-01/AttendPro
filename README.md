@@ -200,6 +200,49 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 
 ## Getting Started
 
+## Deploy Web App On Render (Web Only)
+
+This deploys only the Node.js backend + static web client from this repo. Flutter/mobile apps are not deployed on Render in this setup.
+
+### Option A: Blueprint deploy (recommended)
+- Keep `render.yaml` at repo root.
+- In Render, create a new Blueprint from your GitHub repository.
+- Render will create one web service using `server/` as the root directory.
+
+### Option B: Manual Web Service
+- New Render Web Service -> connect this repository.
+- Set Root Directory to `server`.
+- Build Command: `npm ci`
+- Start Command: `npm start`
+- Health Check Path: `/api`
+
+### Required environment variables on Render
+Set these in the Render dashboard for the web service:
+
+```env
+NODE_ENV=production
+MONGODB_URI=<your mongodb connection string>
+JWT_SECRET=<strong random secret>
+JWT_REFRESH_SECRET=<strong random secret>
+
+# Recommended for deployed web access and CORS
+BASE_URL=https://<your-render-service>.onrender.com
+CORS_ALLOWED_ORIGINS=https://<your-render-service>.onrender.com
+
+# Optional email/sms integrations
+EMAIL_USER=
+EMAIL_PASS=
+SENDER_EMAIL=
+BREVO_SMTP_KEY=
+TWILIO_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+```
+
+Notes:
+- Render automatically provides `PORT` and `RENDER_EXTERNAL_URL`.
+- The server already serves the web client pages, so no separate static hosting is required.
+
 ## 1) Backend setup
 
 ```bash

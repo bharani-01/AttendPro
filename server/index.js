@@ -43,10 +43,19 @@ app.set('trust proxy', 1);
 connectDB();
 startRetentionCleanupJob();
 
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+const normalizeOrigin = (value) => (value || '').trim().replace(/\/+$/, '');
+
+const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
+
+const fallbackOrigins = [
+  normalizeOrigin(process.env.BASE_URL),
+  normalizeOrigin(process.env.RENDER_EXTERNAL_URL)
+].filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...configuredOrigins, ...fallbackOrigins]));
 
 const corsOptions = {
   origin(origin, callback) {
@@ -426,6 +435,11 @@ app.use((err, req, res, next) => {
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);
+  if (allowedOrigins.length) {
+    console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
+  } else {
+    console.log('CORS allowed origins: none configured');
+  }
 });
 
 module.exports = app;
