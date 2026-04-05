@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Professional App Gap Roadmap</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --ink: #152238;
+      --muted: #5d6a7e;
+      --line: #dce3ef;
+      --accent: #ff6b35;
+      --accent-2: #0f9d58;
+      --critical: #d93025;
+      --high: #f29900;
+      --medium: #1a73e8;
+      --low: #6b7280;
+      --shadow: 0 14px 32px rgba(11, 31, 58, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Trebuchet MS", "Verdana", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, #ffe6db 0%, transparent 32%),
+        radial-gradient(circle at 90% 10%, #dbf7e8 0%, transparent 35%),
+        var(--bg);
+      min-height: 100vh;
+    }
+
+    .hero {
+      padding: 42px 20px 20px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 3vw, 2.6rem);
+      letter-spacing: 0.02em;
+    }
+
+    .hero p {
+      margin: 12px auto 0;
+      max-width: 850px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .layout {
+      width: min(1180px, 94vw);
+      margin: 18px auto 52px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(90deg, #ffffff 0%, #f7fafc 100%);
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0.01em;
+    }
+
+    .panel-body {
+      padding: 12px 14px 8px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #fff;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 0.98rem;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #fff;
+      vertical-align: middle;
+    }
+
+    .critical { background: var(--critical); }
+    .high { background: var(--high); color: #1e293b; }
+    .medium { background: var(--medium); }
+    .low { background: var(--low); }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.45;
+      color: #2a3750;
+      font-size: 0.93rem;
+    }
+
+    li { margin: 6px 0; }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px dashed #e7edf7;
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: #fbfdff;
+    }
+
+    .feature-item + .feature-item {
+      margin-top: 8px;
+    }
+
+    .feature-text {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.45;
+    }
+
+    .feature-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .mini-btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #1f2a3b;
+      border-radius: 8px;
+      padding: 6px 9px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .mini-btn:hover {
+      border-color: #cdd8ea;
+      background: #f4f8ff;
+    }
+
+    .mini-btn.copy {
+      border-color: #ffd1c1;
+      background: #fff5f1;
+      color: #8f3b1e;
+    }
+
+    .mini-btn.copy:hover {
+      background: #ffe9df;
+    }
+
+    .prompt-preview {
+      margin-top: 8px;
+      border: 1px solid #e3ebf9;
+      border-radius: 10px;
+      background: #f8fbff;
+      padding: 9px;
+      font-size: 0.82rem;
+      color: #26384f;
+      display: none;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+
+    .footer-note {
+      padding: 6px 2px 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .grid { grid-template-columns: 1fr; }
+      .panel-head { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <h1>Professional App Gaps - Missing Features Roadmap</h1>
+    <p>
+      This page lists what is still missing to make the attendance platform fully professional,
+      production-grade, secure, scalable, and enterprise-ready.
+    </p>
+  </section>
+
+  <main class="layout">
+    <article class="panel">
+      <header class="panel-head">
+        <h2>How to Read This Roadmap</h2>
+        <div class="meta">
+          <span class="chip">Scope: Missing Features Only</span>
+        </div>
+      </header>
+      <div class="panel-body grid">
+        <section class="card">
+          <h3>Priority Meaning</h3>
+          <ul>
+            <li><strong>Critical</strong>: Must be done before production launch.</li>
+            <li><strong>High</strong>: Required for stable operation at institution scale.</li>
+            <li><strong>Medium</strong>: Important for maturity and operational excellence.</li>
+            <li><strong>Low</strong>: Strategic enhancements after core hardening.</li>
+          </ul>
+        </section>
+        <section class="card">
+          <h3>Execution Rule</h3>
+          <ul>
+            <li>Each feature should have owner, ETA, and measurable acceptance criteria.</li>
+            <li>No new major UX features until security + reliability criticals are closed.</li>
+            <li>Every release should include both functional and non-functional validations.</li>
+            <li>All production-impacting changes should have rollback procedure.</li>
+          </ul>
+        </section>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header class="panel-head">
+        <h2>Immediate Priority (0-2 weeks)</h2>
+        <div class="meta">
+          <span class="chip">Execution Focus: Stability + Security</span>
+        </div>
+      </header>
+      <div class="panel-body grid">
+        <section class="card">
+          <h3>Security Hardening <span class="badge critical">Critical</span></h3>
+          <ul>
+            <li>Multi-factor authentication for admin and faculty accounts.</li>
+            <li>CSRF protection and stricter security headers policy.</li>
+            <li>Automated lockout abuse detection with progressive cooldowns.</li>
+            <li>Secrets rotation plan and secure env key management workflow.</li>
+            <li>Device/session management page to revoke active sessions by user.</li>
+            <li>Password policy enforcement: complexity, rotation, breached-password checks.</li>
+            <li>IP and geo anomaly checks for suspicious login attempts.</li>
+            <li>Signed URL strategy for any sensitive downloadable reports.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Reliability & Data Safety <span class="badge critical">Critical</span></h3>
+          <ul>
+            <li>Automated database backup and tested restore runbook.</li>
+            <li>Disaster recovery process with RTO/RPO targets.</li>
+            <li>Idempotency for critical write APIs to avoid duplicate operations.</li>
+            <li>Background job retry policy for email/SMS failures.</li>
+            <li>Dead-letter queue strategy for failed async tasks.</li>
+            <li>Data migration versioning with rollback-safe scripts.</li>
+            <li>Database write concern tuning and transactional boundaries for core flows.</li>
+            <li>Consistency checks for attendance vs QR session reconciliation.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>API Governance <span class="badge critical">Critical</span></h3>
+          <ul>
+            <li>Standardized API error schema and correlation IDs in all responses.</li>
+            <li>Rate limit tiers by role and endpoint sensitivity.</li>
+            <li>Contract versioning policy to prevent breaking client behavior.</li>
+            <li>Request validation middleware coverage at every write endpoint.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Release Controls <span class="badge high">High</span></h3>
+          <ul>
+            <li>Feature flags for risky modules (QR, bulk actions, exports).</li>
+            <li>Canary rollout option with quick rollback switch.</li>
+            <li>Pre-release checklist: auth, attendance marking, report generation, messaging.</li>
+            <li>Post-release verification script with critical endpoint probes.</li>
+          </ul>
+        </section>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header class="panel-head">
+        <h2>High Value Next (2-6 weeks)</h2>
+        <div class="meta">
+          <span class="chip">Execution Focus: Scale + UX</span>
+        </div>
+      </header>
+      <div class="panel-body grid">
+        <section class="card">
+          <h3>Performance at Scale <span class="badge high">High</span></h3>
+          <ul>
+            <li>Pagination/search for every large table, not only some admin views.</li>
+            <li>Server query optimization and index review for report endpoints.</li>
+            <li>Response caching strategy for heavy dashboards and analytics.</li>
+            <li>Large list virtualization for web and mobile tables.</li>
+            <li>Pre-aggregated reporting collections for daily/weekly analytics.</li>
+            <li>Background generation for heavy CSV exports and downloadable job status.</li>
+            <li>Client-side memoization for repeated filter/search state transitions.</li>
+            <li>Progressive rendering for data-heavy cards and report tables.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Professional Frontend Completeness <span class="badge high">High</span></h3>
+          <ul>
+            <li>Dedicated substitutions management UI (list/create/edit/filter).</li>
+            <li>Global search and filter consistency across admin tabs.</li>
+            <li>Unified empty/error/loading states for all pages.</li>
+            <li>Role-aware shortcut actions and bulk operations UX.</li>
+            <li>In-app command center for quick actions (Add Student, Mark Attendance, Export).</li>
+            <li>Draft-save and unsaved-change protection on long forms.</li>
+            <li>Advanced table controls: sort, column visibility, sticky headers.</li>
+            <li>Context help tooltips for complex academic configurations.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Accessibility & Quality UX <span class="badge high">High</span></h3>
+          <ul>
+            <li>Keyboard-only navigation for all dashboard actions.</li>
+            <li>Color contrast compliance and ARIA labeling pass.</li>
+            <li>Screen-reader tested forms/tables/modals.</li>
+            <li>Consistent responsive behavior for tablet-sized screens.</li>
+            <li>Reduced motion mode and high-contrast theme support.</li>
+            <li>Accessible error summaries and focus management on validation failures.</li>
+            <li>Readable typography scale and touch-target consistency on mobile.</li>
+            <li>Localization-ready date/time/number formatting.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Audit & Compliance Features <span class="badge medium">Medium</span></h3>
+          <ul>
+            <li>Immutable audit trail export and tamper-evidence indicators.</li>
+            <li>Retention policies for logs, attendance, and messages.</li>
+            <li>Data privacy controls and consent-aware communications.</li>
+            <li>Policy-based access approvals for sensitive admin actions.</li>
+            <li>Download audit logs with integrity checksum.</li>
+            <li>PII visibility masking by role and need-to-know policy.</li>
+            <li>Consent and opt-out trails for parent notifications.</li>
+            <li>Institution policy templates for retention and archival.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Academic Operations Maturity <span class="badge high">High</span></h3>
+          <ul>
+            <li>Term/semester setup wizard (calendar, holidays, exam windows).</li>
+            <li>Batch promotion flow year-over-year with validation checks.</li>
+            <li>Subject prerequisite mapping and timetable conflict prevention.</li>
+            <li>Automated alerts for low attendance thresholds by class/subject.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Communication Maturity <span class="badge medium">Medium</span></h3>
+          <ul>
+            <li>Notification templates with approval workflow.</li>
+            <li>Delivery analytics (sent, delivered, failed, read).</li>
+            <li>Digest notifications to reduce message fatigue.</li>
+            <li>Do-not-disturb schedule and priority channel controls.</li>
+          </ul>
+        </section>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header class="panel-head">
+        <h2>Production Engineering Gaps</h2>
+        <div class="meta">
+          <span class="chip">Execution Focus: Delivery Maturity</span>
+        </div>
+      </header>
+      <div class="panel-body grid">
+        <section class="card">
+          <h3>Testing & Automation <span class="badge high">High</span></h3>
+          <ul>
+            <li>Backend integration test suite for auth, attendance, QR, and reporting.</li>
+            <li>Frontend E2E test coverage for all role dashboards.</li>
+            <li>Seeded large-data regression tests in CI pipeline.</li>
+            <li>Performance baseline tests with alert thresholds.</li>
+            <li>Contract tests for public/private API schemas.</li>
+            <li>Mutation tests for critical auth and attendance modules.</li>
+            <li>Automated visual regression checks for key pages.</li>
+            <li>Test data factory utilities for deterministic scenario generation.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>DevOps & Environments <span class="badge medium">Medium</span></h3>
+          <ul>
+            <li>Separate dev/stage/prod deployment pipelines.</li>
+            <li>Zero-downtime deployment strategy and rollback automation.</li>
+            <li>Configuration validation at startup and environment health checks.</li>
+            <li>Release notes + migration checklists per deployment.</li>
+            <li>Infrastructure-as-code for reproducible environment setup.</li>
+            <li>Blue/green or rolling deployment support.</li>
+            <li>Automated secrets scanning on pull requests.</li>
+            <li>Containerized local dev parity with production baseline.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Monitoring & Alerting <span class="badge medium">Medium</span></h3>
+          <ul>
+            <li>Automated alerts on error spikes, latency, and DB state issues.</li>
+            <li>SLO dashboards for login success, attendance write success, and API p95.</li>
+            <li>Trace correlation across API and background services.</li>
+            <li>On-call runbook linked to critical alerts.</li>
+            <li>Business KPIs: attendance completion rate per day, unresolved leave queue, substitution lag.</li>
+            <li>Error budget tracking and burn-rate alerts.</li>
+            <li>Alert deduplication and severity-based escalation.</li>
+            <li>Service dependency map with outage impact analysis.</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h3>Advanced Product Features <span class="badge low">Low</span></h3>
+          <ul>
+            <li>Offline-first attendance capture with sync conflict resolution.</li>
+            <li>Parent portal and consent-aware attendance notifications.</li>
+            <li>Institution-level configuration wizard and tenant branding.</li>
+            <li>Open API docs portal for integration with ERP/LMS systems.</li>
+            <li>Predictive analytics for attendance risk forecasting.</li>
+            <li>Automated timetable suggestions based on faculty availability and constraints.</li>
+            <li>Cross-campus multi-tenant governance with delegated admins.</li>
+            <li>Policy simulation sandbox before applying attendance rule changes.</li>
+          </ul>
+        </section>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header class="panel-head">
+        <h2>Feature Acceptance Checklist</h2>
+        <div class="meta">
+          <span class="chip">Definition of Done: Professional Grade</span>
+        </div>
+      </header>
+      <div class="panel-body grid">
+        <section class="card">
+          <h3>Security Completion Criteria</h3>
+          <ul>
+            <li>Pen-test issues closed for high and critical findings.</li>
+            <li>All auth and admin actions appear in immutable audit logs.</li>
+            <li>No secrets hardcoded in repo, runtime, or logs.</li>
+            <li>Role boundary tests pass for all protected routes.</li>
+          </ul>
+        </section>
+        <section class="card">
+          <h3>Performance Completion Criteria</h3>
+          <ul>
+            <li>Dashboard first meaningful paint under 2 seconds on target hardware.</li>
+            <li>Large table load actions are paginated and incremental by default.</li>
+            <li>Report generation does not block primary app interactions.</li>
+            <li>p95 API latency within defined SLO for critical endpoints.</li>
+          </ul>
+        </section>
+        <section class="card">
+          <h3>Reliability Completion Criteria</h3>
+          <ul>
+            <li>Backup restore drill completed and documented.</li>
+            <li>Zero data-loss in attendance marking under retry/failure scenarios.</li>
+            <li>Graceful degradation tested for email/SMS provider downtime.</li>
+            <li>Incident response playbook validated in staging simulations.</li>
+          </ul>
+        </section>
+        <section class="card">
+          <h3>UX Completion Criteria</h3>
+          <ul>
+            <li>All key role flows complete in three clicks or less where possible.</li>
+            <li>Accessibility checks pass for keyboard and screen-reader usage.</li>
+            <li>Error messages are actionable and mapped to field-level issues.</li>
+            <li>Mobile and desktop parity maintained for critical workflows.</li>
+          </ul>
+        </section>
+      </div>
+    </article>
+
+    <p class="footer-note">
+      Recommended next step: execute Critical and High sections first, then lock test automation before adding new major features.
+    </p>
+  </main>
+
+  <script>
+    function buildPrompt(featureText, sectionTitle) {
+      return [
+        'You are a senior full-stack engineer working on an attendance management platform.',
+        'Implement the following feature end-to-end:',
+        '',
+        `Feature: ${featureText}`,
+        `Roadmap Section: ${sectionTitle}`,
+        '',
+        'Required output:',
+        '1. Technical approach and assumptions',
+        '2. Backend changes (routes/controllers/models/migrations)',
+        '3. Frontend changes (UI states, validation, UX behavior)',
+        '4. Security and edge-case handling',
+        '5. Performance considerations',
+        '6. Test cases (unit/integration/e2e)',
+        '7. Rollout and rollback plan',
+        '',
+        'Constraints:',
+        '- Keep API backward-compatible where possible.',
+        '- Include pagination/filter/search for large datasets when relevant.',
+        '- Add clear user-facing errors and loading states.',
+        '- Provide acceptance criteria and a Definition of Done checklist.',
+      ].join('\n');
+    }
+
+    function copyText(text, buttonEl) {
+      navigator.clipboard.writeText(text).then(() => {
+        const old = buttonEl.textContent;
+        buttonEl.textContent = 'Copied';
+        setTimeout(() => {
+          buttonEl.textContent = old;
+        }, 1200);
+      }).catch(() => {
+        const old = buttonEl.textContent;
+        buttonEl.textContent = 'Copy failed';
+        setTimeout(() => {
+          buttonEl.textContent = old;
+        }, 1200);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const sections = Array.from(document.querySelectorAll('.panel'));
+
+      sections.forEach((panel) => {
+        const sectionTitle = panel.querySelector('.panel-head h2')?.textContent?.trim() || 'Roadmap';
+        const listItems = panel.querySelectorAll('li');
+
+        listItems.forEach((li) => {
+          const featureText = li.textContent.trim();
+          if (!featureText) return;
+
+          const prompt = buildPrompt(featureText, sectionTitle);
+
+          li.classList.add('feature-item');
+          li.innerHTML = '';
+
+          const textSpan = document.createElement('span');
+          textSpan.className = 'feature-text';
+          textSpan.textContent = featureText;
+
+          const actions = document.createElement('span');
+          actions.className = 'feature-actions';
+
+          const viewBtn = document.createElement('button');
+          viewBtn.className = 'mini-btn';
+          viewBtn.type = 'button';
+          viewBtn.textContent = 'Show Prompt';
+
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'mini-btn copy';
+          copyBtn.type = 'button';
+          copyBtn.textContent = 'Copy Prompt';
+
+          const preview = document.createElement('div');
+          preview.className = 'prompt-preview';
+          preview.textContent = prompt;
+
+          viewBtn.addEventListener('click', () => {
+            const isOpen = preview.style.display === 'block';
+            preview.style.display = isOpen ? 'none' : 'block';
+            viewBtn.textContent = isOpen ? 'Show Prompt' : 'Hide Prompt';
+          });
+
+          copyBtn.addEventListener('click', () => {
+            copyText(prompt, copyBtn);
+          });
+
+          actions.appendChild(viewBtn);
+          actions.appendChild(copyBtn);
+
+          li.appendChild(textSpan);
+          li.appendChild(actions);
+          li.appendChild(preview);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -16,6 +16,11 @@ const leaveRequestSchema = new mongoose.Schema({
     ref: 'Class',
     required: true
   },
+  assignedFaculty: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   date: {
     type: Date,
     required: true
@@ -51,5 +56,7 @@ const leaveRequestSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+leaveRequestSchema.index({ assignedFaculty: 1, status: 1, date: -1 });
 
 module.exports = mongoose.model('LeaveRequest', leaveRequestSchema);

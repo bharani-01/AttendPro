@@ -5,17 +5,17 @@ import '../domain/student_models.dart';
 
 class StudentRepository {
   StudentRepository()
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: AppConfig.apiBaseUrl,
-            connectTimeout: AppConfig.connectTimeout,
-            receiveTimeout: AppConfig.receiveTimeout,
-            headers: const {
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true',
-            },
-          ),
-        );
+    : _dio = Dio(
+        BaseOptions(
+          baseUrl: AppConfig.apiBaseUrl,
+          connectTimeout: AppConfig.connectTimeout,
+          receiveTimeout: AppConfig.receiveTimeout,
+          headers: const {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
+          },
+        ),
+      );
 
   final Dio _dio;
   static const Duration _attendanceReceiveTimeout = Duration(seconds: 90);
@@ -31,7 +31,9 @@ class StudentRepository {
     return StudentProfile.fromJson(user);
   }
 
-  Future<AttendanceSummaryBundle> fetchAttendanceSummary({required String accessToken}) async {
+  Future<AttendanceSummaryBundle> fetchAttendanceSummary({
+    required String accessToken,
+  }) async {
     return fetchAttendanceSummaryFiltered(accessToken: accessToken);
   }
 
@@ -48,7 +50,10 @@ class StudentRepository {
         endDate: endDate,
         subjectId: subjectId,
       ),
-      options: _authOptions(accessToken, receiveTimeout: _attendanceReceiveTimeout),
+      options: _authOptions(
+        accessToken,
+        receiveTimeout: _attendanceReceiveTimeout,
+      ),
     );
 
     final body = _asMap(response.data);
@@ -61,7 +66,9 @@ class StudentRepository {
     return AttendanceSummaryBundle(overall: overall, subjectSummary: summary);
   }
 
-  Future<List<AttendanceRecord>> fetchAttendanceRecords({required String accessToken}) async {
+  Future<List<AttendanceRecord>> fetchAttendanceRecords({
+    required String accessToken,
+  }) async {
     return fetchAttendanceRecordsFiltered(accessToken: accessToken);
   }
 
@@ -78,7 +85,10 @@ class StudentRepository {
         endDate: endDate,
         subjectId: subjectId,
       ),
-      options: _authOptions(accessToken, receiveTimeout: _attendanceReceiveTimeout),
+      options: _authOptions(
+        accessToken,
+        receiveTimeout: _attendanceReceiveTimeout,
+      ),
     );
 
     final body = _asMap(response.data);
@@ -88,7 +98,9 @@ class StudentRepository {
         .toList(growable: false);
   }
 
-  Future<List<TimetableItem>> fetchTodaySchedule({required String accessToken}) async {
+  Future<List<TimetableItem>> fetchTodaySchedule({
+    required String accessToken,
+  }) async {
     final response = await _dio.get<dynamic>(
       '/timetable/today',
       options: _authOptions(accessToken),
@@ -101,7 +113,30 @@ class StudentRepository {
         .toList(growable: false);
   }
 
-  Future<List<AnnouncementItem>> fetchAnnouncements({required String accessToken}) async {
+  Future<List<TimetableItem>> fetchWeeklyTimetable({
+    required String accessToken,
+    required String classId,
+  }) async {
+    if (classId.trim().isEmpty) {
+      return const <TimetableItem>[];
+    }
+
+    final response = await _dio.get<dynamic>(
+      '/timetable',
+      queryParameters: {'classId': classId},
+      options: _authOptions(accessToken),
+    );
+
+    final body = _asMap(response.data);
+    return _asList(body['timetables'])
+        .whereType<Map<String, dynamic>>()
+        .map(TimetableItem.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<List<AnnouncementItem>> fetchAnnouncements({
+    required String accessToken,
+  }) async {
     final response = await _dio.get<dynamic>(
       '/announcements',
       options: _authOptions(accessToken),
@@ -114,7 +149,9 @@ class StudentRepository {
         .toList(growable: false);
   }
 
-  Future<List<LeaveRequestItem>> fetchLeaveRequests({required String accessToken}) async {
+  Future<List<LeaveRequestItem>> fetchLeaveRequests({
+    required String accessToken,
+  }) async {
     final response = await _dio.get<dynamic>(
       '/leave-requests',
       options: _authOptions(accessToken),
@@ -185,10 +222,7 @@ class StudentRepository {
       final response = await _dio.post<dynamic>(
         '/qr/submit',
         options: _authOptions(accessToken),
-        data: {
-          'sessionId': sessionId,
-          'qrToken': token,
-        },
+        data: {'sessionId': sessionId, 'qrToken': token},
       );
 
       final body = _asMap(response.data);
@@ -198,7 +232,9 @@ class StudentRepository {
     }
   }
 
-  Future<List<MessagableUser>> fetchMessagableUsers({required String accessToken}) async {
+  Future<List<MessagableUser>> fetchMessagableUsers({
+    required String accessToken,
+  }) async {
     final response = await _dio.get<dynamic>(
       '/messages/messagable-users',
       options: _authOptions(accessToken),
@@ -282,10 +318,7 @@ class StudentRepository {
     }
   }
 
-  Options _authOptions(
-    String accessToken, {
-    Duration? receiveTimeout,
-  }) {
+  Options _authOptions(String accessToken, {Duration? receiveTimeout}) {
     return Options(
       headers: {'Authorization': 'Bearer $accessToken'},
       receiveTimeout: receiveTimeout,

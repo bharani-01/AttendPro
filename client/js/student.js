@@ -1,6 +1,30 @@
 let currentUser = null;
 let subjectChart = null;
 let attendancePieChart = null;
+let studentTimetableEntries = [];
+let leaveFormBindingsInitialized = false;
+const STUDENT_TIMETABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const STUDENT_TIMETABLE_COLUMNS = [
+    { type: 'period', period: 1, title: 'I', time: '08:05 AM - 08:55 AM' },
+    { type: 'period', period: 2, title: 'II', time: '09:00 AM - 09:50 AM' },
+    { type: 'break', label: 'BREAK' },
+    { type: 'period', period: 3, title: 'III', time: '10:10 AM - 11:05 AM' },
+    { type: 'period', period: 4, title: 'IV', time: '11:05 AM - 12:00 Noon' },
+    { type: 'break', label: 'LUNCH BREAK' },
+    { type: 'period', period: 5, title: 'V', time: '01:00 PM - 01:50 PM' },
+    { type: 'period', period: 6, title: 'VI', time: '01:50 PM - 02:40 PM' },
+    { type: 'break', label: 'BREAK' },
+    { type: 'period', period: 7, title: 'VII', time: '02:55 PM - 03:45 PM' }
+];
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     currentUser = checkAuth();
@@ -127,6 +151,9 @@ async function loadPageData(page) {
             break;
         case 'daily':
             await loadDailyLogs();
+            break;
+        case 'timetable':
+            await loadStudentTimetable();
             break;
         case 'leave':
             await loadLeaveFormData();
@@ -411,20 +438,186 @@ function closeModal() {
     document.getElementById('modal').classList.remove('active');
 }
 
-async function loadLeaveFormData() {
+async function loadStudentTimetable() {
     try {
         const profileData = await api.get('/auth/profile');
         currentUser = profileData.user;
 
-        const subjectSelect = document.getElementById('leaveSubject');
-        const subjects = await api.get('/subjects');
-        
-        subjectSelect.innerHTML = '<option value="">Select Subject</option>' +
-            subjects.subjects.map(s => `<option value="${s._id}">${s.subjectName}</option>`).join('');
+        const meta = document.getElementById('studentTimetableClassMeta');
+        if (!currentUser.assignedClass?._id) {
+            if (meta) {
+                meta.textContent = 'You are not assigned to a class yet.';
+            }
+            renderStudentTimetableGrid([]);
+            return;
+        }
 
-        document.getElementById('leaveDate').value = getTodayDate();
+        const classInfo = currentUser.assignedClass;
+        if (meta) {
+            meta.textContent = `${classInfo.className} | ${classInfo.department || '-'} | Year ${classInfo.year || '-'} | Batch ${classInfo.batch || '-'}`;
+        }
+
+        const data = await api.get(`/timetable?classId=${classInfo._id}`);
+        studentTimetableEntries = data.timetables || [];
+        renderStudentTimetableGrid(studentTimetableEntries);
+    } catch (error) {
+        console.error('Error loading student timetable:', error);
+        renderStudentTimetableGrid([]);
+    }
+}
+
+function renderStudentTimetableGrid(timetables) {
+    const table = document.getElementById('studentWeeklyTimetableGrid');
+    if (!table) return;
+
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    if (thead) {
+        const headerCells = STUDENT_TIMETABLE_COLUMNS.map((col) => {
+            if (col.type === 'break') {
+                return `<th class="slot-head break-head">${col.label}</th>`;
+            }
+            return `<th class="slot-head"><div class="head-period">${col.title}</div><div class="head-time">${col.time}</div></th>`;
+        }).join('');
+
+        thead.innerHTML = `
+            <tr>
+                <th class="day-head">Day / Hour</th>
+                ${headerCells}
+            </tr>
+        `;
+    }
+
+    const list = timetables || [];
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center">No timetable entries found for your class.</td></tr>';
+        return;
+    }
+
+    const slotMap = new Map();
+    list.forEach((entry) => {
+        slotMap.set(`${entry.day}-${entry.period}`, entry);
+    });
+
+    const rows = STUDENT_TIMETABLE_DAYS.map((day) => {
+        const cells = STUDENT_TIMETABLE_COLUMNS.map((col) => {
+            if (col.type === 'break') {
+                return `<td class="timetable-slot break-cell">${col.label}</td>`;
+            }
+
+            const entry = slotMap.get(`${day}-${col.period}`);
+            if (!entry) {
+                return '<td class="timetable-slot empty-slot"><span style="color:var(--gray-400); font-size:12px;">-</span></td>';
+            }
+
+            return `
+                <td class="timetable-slot filled-slot">
+                    <div class="slot-subject">${entry.subject?.subjectCode ? `${entry.subject.subjectCode} - ` : ''}${entry.subject?.subjectName || 'N/A'}</div>
+                    <div class="slot-faculty"><strong>Faculty:</strong> ${entry.faculty?.name || 'N/A'}</div>
+                    <div class="slot-room">${entry.roomNo ? `Room: ${entry.roomNo}` : 'Room: N/A'}</div>
+                </td>
+            `;
+        }).join('');
+
+        return `
+            <tr>
+                <td class="day-cell">${day}</td>
+                ${cells}
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = rows.join('');
+}
+
+async function loadLeaveFormData() {
+    try {
+        const dateInput = document.getElementById('leaveDate');
+        const subjectSelect = document.getElementById('leaveSubject');
+        const periodSelect = document.getElementById('leavePeriod');
+        if (!dateInput || !subjectSelect || !periodSelect) return;
+
+        if (!dateInput.value) {
+            dateInput.value = getTodayDate();
+        }
+
+        if (!leaveFormBindingsInitialized) {
+            dateInput.addEventListener('change', async () => {
+                await loadEligibleLeaveSubjectsByDate(dateInput.value);
+            });
+
+            subjectSelect.addEventListener('change', () => {
+                const selectedOption = subjectSelect.options[subjectSelect.selectedIndex];
+                if (!selectedOption) return;
+
+                // Keep period choices relevant to selected subject when possible.
+                const periodsText = selectedOption.getAttribute('data-periods') || '';
+                if (!periodsText || selectedOption.value === '__all__') return;
+
+                const periods = periodsText
+                    .split(',')
+                    .map((p) => Number(p.trim()))
+                    .filter((p) => Number.isFinite(p))
+                    .sort((a, b) => a - b);
+
+                if (!periods.length) return;
+
+                const currentValue = periodSelect.value;
+                periodSelect.innerHTML = '<option value="">Full Day</option>' +
+                    periods.map((p) => `<option value="${p}">${p}</option>`).join('');
+
+                if (currentValue && periods.includes(Number(currentValue))) {
+                    periodSelect.value = currentValue;
+                }
+            });
+
+            leaveFormBindingsInitialized = true;
+        }
+
+        await loadEligibleLeaveSubjectsByDate(dateInput.value);
     } catch (error) {
         console.error('Error loading leave form data:', error);
+    }
+}
+
+async function loadEligibleLeaveSubjectsByDate(date) {
+    const subjectSelect = document.getElementById('leaveSubject');
+    const periodSelect = document.getElementById('leavePeriod');
+    if (!subjectSelect || !periodSelect) return;
+
+    subjectSelect.innerHTML = '<option value="">Loading subjects...</option>';
+    periodSelect.innerHTML = '<option value="">Full Day</option>';
+
+    if (!date) {
+        subjectSelect.innerHTML = '<option value="">Select date first</option>';
+        return;
+    }
+
+    try {
+        const data = await api.get(`/leave-requests/available-subjects?date=${encodeURIComponent(date)}`);
+        const subjects = Array.isArray(data?.subjects) ? data.subjects : [];
+        const periods = Array.isArray(data?.periods) ? data.periods : [];
+
+        if (!subjects.length) {
+            subjectSelect.innerHTML = '<option value="">No classes on selected date</option>';
+        } else {
+            subjectSelect.innerHTML = [
+                '<option value="">Select Subject</option>',
+                '<option value="__all__">All Subjects</option>',
+                ...subjects.map((s) => {
+                    const periodAttr = Array.isArray(s.periods) ? s.periods.join(',') : '';
+                    const code = s.subjectCode ? ` (${s.subjectCode})` : '';
+                    return `<option value="${s._id}" data-periods="${periodAttr}">${s.subjectName}${code}</option>`;
+                })
+            ].join('');
+        }
+
+        periodSelect.innerHTML = '<option value="">Full Day</option>' +
+            periods.map((p) => `<option value="${p}">${p}</option>`).join('');
+    } catch (error) {
+        console.error('Error loading leave subjects for date:', error);
+        subjectSelect.innerHTML = '<option value="">Failed to load subjects</option>';
     }
 }
 
@@ -440,25 +633,17 @@ async function submitLeaveRequest() {
     }
 
     try {
-        const profileData = await api.get('/auth/profile');
-        const classId = profileData.user.assignedClass;
-
-        if (!classId) {
-            alert('You are not assigned to any class');
-            return;
-        }
-
-        await api.post('/leave-requests', {
+        const result = await api.post('/leave-requests', {
             subjectId,
-            classId,
             date,
             period: period ? parseInt(period) : null,
             reason
         });
 
-        alert('Leave request submitted successfully');
+        alert(result?.message || 'Leave request submitted successfully');
         document.getElementById('leaveRequestForm').reset();
         document.getElementById('leaveDate').value = getTodayDate();
+        await loadEligibleLeaveSubjectsByDate(document.getElementById('leaveDate').value);
         await loadMyLeaveRequests();
     } catch (error) {
         alert('Error submitting leave request: ' + error.message);
@@ -731,8 +916,8 @@ async function submitQRCheckin() {
             <div class="success-message">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 <p><strong>Checked In Successfully!</strong></p>
-                <p>${result.attendance.subjectName} - ${result.attendance.className}</p>
-                <p>Period: ${result.attendance.period}</p>
+                <p>${escapeHtml(result.attendance.subjectName)} - ${escapeHtml(result.attendance.className)}</p>
+                <p>Period: ${escapeHtml(result.attendance.period)}</p>
             </div>
         `;
         document.getElementById('checkinBtn').style.display = 'none';
@@ -740,7 +925,7 @@ async function submitQRCheckin() {
     } catch (error) {
         document.getElementById('sessionStatus').innerHTML = `
             <div class="error-message">
-                <p>${error.message}</p>
+                <p>${escapeHtml(error.message)}</p>
             </div>
         `;
     }
@@ -752,21 +937,45 @@ async function loadAnnouncements() {
         const banner = document.getElementById('announcementBanner');
         if (!banner) return;
         if (response.announcements && response.announcements.length > 0) {
-            banner.innerHTML = response.announcements.map(ann => `
-                <div class="announcement">
-                    <h4>${ann.title}</h4>
-                    <p>${ann.content}</p>
-                    <div class="announcement-meta">
-                        Posted by ${ann.createdBy?.name || 'Unknown'} on ${new Date(ann.createdAt).toLocaleDateString()}
-                    </div>
+            const announcements = response.announcements.slice(0, 3);
+            banner.innerHTML = `
+                <div class="announcement-banner-head">
+                    <h3>Latest Announcements</h3>
+                    <span class="announcement-count">${announcements.length}</span>
                 </div>
-            `).join('');
+                <div class="announcement-list-grid">
+                    ${announcements.map(ann => `
+                        <div class="announcement">
+                            <button type="button" class="announcement-close-btn" aria-label="Close announcement" onclick="dismissAnnouncementCard(this)">x</button>
+                            <h4>${escapeHtml(ann.title)}</h4>
+                            <p>${escapeHtml(ann.content)}</p>
+                            <div class="announcement-meta">
+                                Posted by ${escapeHtml(ann.createdBy?.name || 'Unknown')} on ${new Date(ann.createdAt).toLocaleDateString()}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="announcement-banner-actions">
+                    <a class="btn btn-secondary btn-small" href="announcements.html">View All</a>
+                </div>
+            `;
             banner.style.display = 'block';
         } else {
             banner.style.display = 'none';
         }
     } catch (error) {
         console.error('Failed to load announcements:', error);
+    }
+}
+
+function dismissAnnouncementCard(button) {
+    const card = button?.closest('.announcement');
+    const banner = document.getElementById('announcementBanner');
+    if (!card || !banner) return;
+
+    card.remove();
+    if (!banner.querySelector('.announcement')) {
+        banner.style.display = 'none';
     }
 }
 
@@ -792,9 +1001,9 @@ async function loadTodaySchedule() {
             const li = document.createElement('li');
             li.className = `schedule-item ${item.isSubstitution ? 'substitution' : ''}`;
             li.innerHTML = `
-                <span class="period-time">Period ${item.period}</span>
-                <span class="subject-name">${item.subject.name}</span>
-                <span class="faculty-name">${item.faculty.name} ${item.isSubstitution ? '(substitute)' : ''}</span>
+                <span class="period-time">Period ${escapeHtml(item.period)}</span>
+                <span class="subject-name">${escapeHtml(item.subject?.name)}</span>
+                <span class="faculty-name">${escapeHtml(item.faculty?.name)} ${item.isSubstitution ? '(substitute)' : ''}</span>
             `;
             scheduleList.appendChild(li);
         });

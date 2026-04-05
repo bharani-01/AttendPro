@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
-<body>
+<body class="messages-page">
     <div class="dashboard-container">
         <nav class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -49,7 +49,7 @@
                 </div>
             </header>
             <div id="pageContent">
-                <div class="page-section active">
+                <div class="page-section active messages-section">
                     <div class="messaging-container">
                     <div class="conversations-list">
                         <div class="list-header">
@@ -71,12 +71,37 @@
                         </div>
                         <div id="chat-area" class="hidden">
                             <div class="chat-header">
-                                <h3 id="chat-with-name"></h3>
+                                <div class="chat-header-user">
+                                    <div class="chat-header-avatar" id="chatHeaderAvatar">U</div>
+                                    <div>
+                                        <button id="chat-with-name" type="button" class="chat-user-name-btn"></button>
+                                        <p class="chat-status" id="chatWithStatus">Tap below to start messaging</p>
+                                    </div>
+                                </div>
+                                <div class="chat-header-actions">
+                                    <input type="text" id="chat-message-search" placeholder="Search in chat..." aria-label="Search messages in current chat">
+                                </div>
                             </div>
                             <div id="message-list" class="message-list">
                                 <!-- Messages will be loaded here -->
                             </div>
                             <div class="message-input">
+                                <div id="reply-preview" class="reply-preview hidden">
+                                    <div class="reply-preview-header">
+                                        <span id="reply-preview-label">Replying</span>
+                                        <button id="cancel-reply-btn" class="reply-cancel-btn" type="button" aria-label="Cancel reply">&times;</button>
+                                    </div>
+                                    <p id="reply-preview-content"></p>
+                                </div>
+                                <div class="composer-toolbar">
+                                    <button id="emoji-picker-btn" class="composer-icon-btn" type="button" aria-label="Open emoji picker" title="Emoji">
+                                        <i class="far fa-smile"></i>
+                                    </button>
+                                    <div id="emoji-picker-panel" class="emoji-picker-panel hidden" role="dialog" aria-label="Emoji picker">
+                                        <div class="emoji-picker-header">Choose emoji</div>
+                                        <div id="emoji-picker-grid" class="emoji-picker-grid"></div>
+                                    </div>
+                                </div>
                                 <textarea id="message-text" placeholder="Type your message..."></textarea>
                                 <button id="send-message-btn" class="btn btn-success">Send</button>
                             </div>
@@ -106,6 +131,18 @@
             <button id="start-conversation-btn" class="btn btn-primary" disabled>Start Conversation</button>
         </div>
     </div>
+
+    <div id="chatUserProfileModal" class="modal">
+        <div class="modal-content chat-user-profile-modal-content">
+            <span class="close-button" id="closeChatUserProfileModal">&times;</span>
+            <h2>User Profile</h2>
+            <div id="chatUserProfileBody" class="chat-user-profile-body"></div>
+        </div>
+    </div>
+
+    <button id="new-message-fab" class="mobile-new-conversation-fab" title="New Conversation" aria-label="New Conversation">
+        <i class="fas fa-plus"></i>
+    </button>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="../js/api.js"></script>

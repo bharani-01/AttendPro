@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Schedule - AttendPro</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+</head>
+<body class="exam-page" data-exam-stage="scheduling">
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <h3>AttendPro</h3>
+                    <span class="sidebar-badge" id="sidebarRoleBadge">User</span>
+                </div>
+            </div>
+            <ul class="nav-menu" id="roleNavMenu"></ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h2 class="page-title">Exam Schedule</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">User</span>
+                            <span class="user-role" id="headerUserRole">User</span>
+                        </div>
+                        <div class="dropdown-content" id="userMenuDropdown">
+                            <a href="profile.html">Profile</a>
+                            <a href="#" id="logoutBtnDropdown">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-section active">
+                <div id="examStatus" class="announcement-status"></div>
+
+                <div class="exam-admin-panel" id="examAdminPanel" style="display:none;">
+                    <h3 class="section-title">Stage 1: Scheduling</h3>
+                    <form id="examPlannerForm" class="attendance-form" onsubmit="return false;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="examDateInput">Exam Date</label>
+                                <input id="examDateInput" type="date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="examClassSelect">Class</label>
+                                <select id="examClassSelect" required>
+                                    <option value="">Select class</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="examTitleInput">Exam Name</label>
+                                <input id="examTitleInput" type="text" placeholder="CA-2 / Midterm / Model" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="examSectionSelect">Exam Section</label>
+                                <select id="examSectionSelect" required>
+                                    <option value="Morning">Morning</option>
+                                    <option value="Afternoon">Afternoon</option>
+                                    <option value="Evening">Evening</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group" style="display:flex;align-items:flex-end;">
+                                <button id="clearExamDraftBtn" class="btn btn-secondary" type="button">Clear Draft</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="table-container exam-draft-table-wrap" id="examDraftWrap" style="display:none; margin-top:14px;">
+                        <div id="draftExamRows"></div>
+                    </div>
+
+                    <div class="exam-draft-actions" id="examDraftActions" style="display:none;">
+                        <button class="btn btn-primary" type="button" id="previewPublishBtn">Continue to Preview</button>
+                    </div>
+                </div>
+
+                <div class="section-header" style="margin-top: 10px;">
+                    <h3 class="section-title" id="publishedSectionTitle">Published Exam Schedule</h3>
+                    <button class="btn btn-secondary" id="refreshExamScheduleBtn" type="button">Refresh</button>
+                </div>
+
+                <div class="table-container">
+                    <table id="publishedExamTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Section</th>
+                                <th>Class</th>
+                                <th>Subject</th>
+                                <th>Exam Name</th>
+                                <th>Created By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="publishedExamRows">
+                            <tr><td colspan="6">No exam schedules found.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/exams.js"></script>
+</body>
+</html>

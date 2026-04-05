@@ -133,7 +133,7 @@ router.post('/generate', auth, roleCheck('faculty', 'admin'), async (req, res) =
   }
 });
 
-router.get('/status/:sessionId', auth, async (req, res) => {
+router.get('/status/:sessionId', auth, roleCheck('faculty', 'admin'), async (req, res) => {
   try {
     const session = await QRSession.findById(req.params.sessionId)
       .populate('faculty', 'name')
@@ -143,6 +143,10 @@ router.get('/status/:sessionId', auth, async (req, res) => {
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (req.user.role === 'faculty' && String(session.faculty?._id || session.faculty) !== String(req.user._id)) {
+      return res.status(403).json({ error: 'Not authorized for this session' });
     }
 
     const classData = await Class.findById(session.class);
@@ -325,10 +329,6 @@ router.post('/submit', auth, roleCheck('student'), async (req, res) => {
       period: session.period
     });
 
-    if (existingAttendance) {
-      return res.status(400).json({ error: 'Attendance already marked' });
-    }
-
     // Determine status: present or late
     let status = 'present';
     const gracePeriodMinutes = 5; // Allow 5 minutes grace period
@@ -342,17 +342,25 @@ router.post('/submit', auth, roleCheck('student'), async (req, res) => {
         }
     }
 
-    const attendance = new Attendance({
-      student: student._id,
-      subject: session.subject,
-      class: session.class,
-      date: dayRange.start,
-      period: session.period,
-      status: status, // Use the determined status
-      markedBy: session.faculty
-    });
+    let attendance;
+    if (existingAttendance) {
+      // Keep QR + manual attendance in sync by upgrading/overwriting with scan result.
+      existingAttendance.status = status;
+      existingAttendance.markedBy = session.faculty;
+      attendance = await existingAttendance.save();
+    } else {
+      attendance = new Attendance({
+        student: student._id,
+        subject: session.subject,
+        class: session.class,
+        date: dayRange.start,
+        period: session.period,
+        status: status, // Use the determined status
+        markedBy: session.faculty
+      });
 
-    await attendance.save();
+      await attendance.save();
+    }
 
     session.checkIns.push({
       student: student._id,
@@ -378,6 +386,10 @@ router.post('/end', auth, roleCheck('faculty', 'admin'), async (req, res) => {
     
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (req.user.role === 'faculty' && String(session.faculty) !== String(req.user._id)) {
+      return res.status(403).json({ error: 'Not authorized for this session' });
     }
     
     session.isActive = false;

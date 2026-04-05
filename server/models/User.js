@@ -62,6 +62,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  parentPhones: [{
+    type: String,
+    trim: true
+  }],
+  dob: {
+    type: Date,
+    default: null
+  },
   qrCode: {
     type: String,
     unique: true,

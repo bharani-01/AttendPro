@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Low Attendance Mailer - AttendPro</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <style>
+        .low-attendance-page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .page-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .low-attendance-filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .filter-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+        }
+        .filter-card label {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--gray-600);
+            margin-bottom: 8px;
+        }
+        .filter-card input {
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            background: #fff;
+            font-weight: 600;
+            padding: 10px 12px;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .filter-card input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .filter-meta {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--gray-500);
+        }
+        .low-attendance-filters input,
+        .low-attendance-filters button {
+            width: 100%;
+        }
+        .summary-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .summary-card {
+            background: #fff;
+            border: 1px solid var(--gray-200);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .summary-card h4 {
+            margin: 0;
+            font-size: 13px;
+            color: var(--gray-600);
+        }
+        .summary-card p {
+            margin: 6px 0 0;
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .report-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin: 14px 0;
+            flex-wrap: wrap;
+        }
+        .status-pill {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .status-sent {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .status-failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .mail-run-status {
+            border: 1px solid var(--gray-200);
+            border-radius: 10px;
+            background: #ffffff;
+            padding: 12px;
+            margin: 12px 0 18px;
+        }
+        .mail-run-status h4 {
+            margin: 0 0 8px;
+            font-size: 14px;
+        }
+        .mail-run-status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px;
+        }
+        .mail-run-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 13px;
+        }
+        .mail-run-errors {
+            margin-top: 10px;
+            padding-left: 18px;
+            color: #991b1b;
+            font-size: 13px;
+        }
+        .btn-cancel-send {
+            display: none;
+        }
+        @media (max-width: 680px) {
+            .low-attendance-page {
+                padding: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="low-attendance-page">
+        <div class="page-topbar">
+            <div>
+                <h2 style="margin:0;">Low Attendance Report & Mail Sender</h2>
+                <p style="margin:6px 0 0;color:var(--gray-600);">Generate up to a cutoff date, confirm, send alerts, and track sent status.</p>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <a class="btn btn-secondary" href="admin-dashboard.html?page=reports">Back to Reports</a>
+            </div>
+        </div>
+
+        <div class="low-attendance-filters">
+            <div class="filter-card">
+                <label for="cutoffDate">Cutoff Date</label>
+                <input type="date" id="cutoffDate">
+                <div class="filter-meta" id="cutoffDateDisplay">Selected: -</div>
+            </div>
+            <div class="filter-card">
+                <label for="threshold">Threshold (%)</label>
+                <input type="number" id="threshold" min="1" max="100" value="75">
+                <div class="filter-meta">Alert students below this percentage.</div>
+            </div>
+            <div style="align-self:end;">
+                <button class="btn btn-primary" id="generateBtn">Generate Report</button>
+            </div>
+        </div>
+
+        <div class="mail-run-status" id="mailRunStatus">
+            <h4>Mail Run Status</h4>
+            <div class="mail-run-status-grid" id="mailRunStatusGrid">
+                <div class="mail-run-item">No mail run started yet.</div>
+            </div>
+            <ul class="mail-run-errors" id="mailRunErrors" style="display:none;"></ul>
+        </div>
+
+        <div class="summary-strip">
+            <div class="summary-card">
+                <h4>Total Low Attendance</h4>
+                <p id="summaryTotal">0</p>
+            </div>
+            <div class="summary-card">
+                <h4>Already Sent</h4>
+                <p id="summarySent">0</p>
+            </div>
+            <div class="summary-card">
+                <h4>Pending to Send</h4>
+                <p id="summaryPending">0</p>
+            </div>
+            <div class="summary-card">
+                <h4>Selected</h4>
+                <p id="summarySelected">0</p>
+            </div>
+        </div>
+
+        <div class="report-actions">
+            <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="selectAllPending">
+                Select all pending
+            </label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-primary" id="sendEmailsBtn">Send Selected Emails</button>
+                <button class="btn btn-secondary btn-cancel-send" id="cancelSendBtn" type="button">Cancel Sending</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="lowAttendanceTable">
+                <thead>
+                    <tr>
+                        <th>Select</th>
+                        <th>Student</th>
+                        <th>Email Target</th>
+                        <th>Class</th>
+                        <th>Total</th>
+                        <th>Present</th>
+                        <th>Attendance %</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="8" class="text-center">Generate report to view records</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="../js/low-attendance-report.js"></script>
+</body>
+</html>

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Faculty - AttendPro</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <h3>AttendPro</h3>
+                    <span class="sidebar-badge">Admin</span>
+                </div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="admin-dashboard.html" class="nav-link">Dashboard</a></li>
+                <li><a href="admin-dashboard.html?page=students" class="nav-link">Students</a></li>
+                <li><a href="add-students.html" class="nav-link">Add Students</a></li>
+                <li><a href="admin-dashboard.html?page=faculty" class="nav-link">Faculty</a></li>
+                <li><a href="add-faculty.html" class="nav-link active">Add Faculty</a></li>
+                <li><a href="admin-dashboard.html?page=classes" class="nav-link">Classes</a></li>
+                <li><a href="admin-dashboard.html?page=departments" class="nav-link">Departments</a></li>
+                <li><a href="admin-dashboard.html?page=subjects" class="nav-link">Subjects</a></li>
+                <li><a href="admin-dashboard.html?page=timetable" class="nav-link">Timetable</a></li>
+                <li><a href="admin-dashboard.html?page=reports" class="nav-link">Reports</a></li>
+                <li><a href="admin-exams.html" class="nav-link">Exams & Marks</a></li>
+                <li><a href="admin-dashboard.html?page=users" class="nav-link">Manage Users</a></li>
+                <li><a href="admin-dashboard.html?page=audit" class="nav-link">Audit Logs</a></li>
+                <li><a href="admin-dashboard.html?page=security" class="nav-link">Security</a></li>
+                <li><a href="messages.html" class="nav-link">Messages</a></li>
+                <li><a href="login.html" class="nav-link logout" id="logoutBtn">Logout</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+                    <h2 class="page-title">Add Faculty</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">Admin</span>
+                            <span class="user-role">Admin</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-content">
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="single">Add Single Faculty</button>
+                        <button class="tab-btn" data-tab="bulk">Bulk Import</button>
+                    </div>
+
+                    <div class="tab-content active" id="single">
+                        <div class="form-card">
+                            <h3>Add Single Faculty</h3>
+                            <form id="addFacultyForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="facultyName">Full Name *</label>
+                                        <input type="text" id="facultyName" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="facultyEmail">Email *</label>
+                                        <input type="email" id="facultyEmail" required>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="facultyUniqueId">Faculty ID *</label>
+                                        <input type="text" id="facultyUniqueId" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="facultyDepartment">Department *</label>
+                                        <input type="text" id="facultyDepartment" required>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="facultyPhone">Phone Number (Optional)</label>
+                                        <input type="text" id="facultyPhone" placeholder="+91 9876543210">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="facultyDob">Date of Birth (Optional)</label>
+                                        <input type="date" id="facultyDob">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="facultyParentEmail">Parent Email ID (Optional)</label>
+                                        <input type="email" id="facultyParentEmail" placeholder="parent@example.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="facultyParentPhones">Parent Numbers (Optional, multiple)</label>
+                                        <input type="text" id="facultyParentPhones" placeholder="+91 9876543210; +91 9123456780">
+                                        <small>Use semicolon, comma, or newline to separate numbers.</small>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group" style="flex:1; min-width:320px;">
+                                        <label>Assigned Subjects (Optional)</label>
+                                        <input type="text" id="facultyAssignedSearch" placeholder="Search in assigned subjects">
+                                        <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                                            <table>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Name</th>
+                                                        <th>Code</th>
+                                                        <th>Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="facultyAssignedSubjectsBody">
+                                                    <tr><td colspan="3" class="text-center">No assigned subjects</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group" style="flex:1; min-width:320px;">
+                                        <label>Add Subjects (Search)</label>
+                                        <div style="display:flex; gap:8px; align-items:center;">
+                                            <input type="text" id="facultyAvailableSearch" placeholder="Search subject name/code">
+                                            <button type="button" class="btn btn-secondary" id="facultySearchBtn" style="width:auto;">Search</button>
+                                        </div>
+                                        <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                                            <table>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Name</th>
+                                                        <th>Code</th>
+                                                        <th>Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="facultyAvailableSubjectsBody">
+                                                    <tr><td colspan="3" class="text-center">Loading subjects...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-info">
+                                    <p>Default Password: <strong id="facultyDefaultPasswordValue">password</strong></p>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Add Faculty</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="bulk">
+                        <div class="form-card">
+                            <h3>Bulk Import Faculty</h3>
+                            <div class="bulk-instructions">
+                                <h4>Instructions:</h4>
+                                <ul>
+                                    <li>Columns: name,email,uniqueId,department,phone,parentEmail,parentPhones,dob,assignedSubjectCodes</li>
+                                    <li>Use semicolon in assignedSubjectCodes: CS101;CS102</li>
+                                    <li>Use semicolon in parentPhones: +91 9000000001;+91 9000000002</li>
+                                </ul>
+                            </div>
+                            <div class="form-group">
+                                <label>Paste CSV Data</label>
+                                <textarea id="facultyCsvData" rows="10" placeholder="name,email,uniqueId,department,phone,parentEmail,parentPhones,dob,assignedSubjectCodes
+Dr A,dr.a@college.edu,FAC001,CSE,+919111111111,parent1@example.com,+919222222222,1985-06-12,CS101;CS201"></textarea>
+                            </div>
+                            <button class="btn btn-primary" onclick="processBulkFaculty()">Import Faculty</button>
+                        </div>
+                        <div id="facultyBulkResults" class="results-card" style="display:none;">
+                            <h4>Import Results</h4>
+                            <div id="facultyResultsContent"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        const currentUser = checkAuth();
+        let subjects = [];
+        let selectedSubjectIds = [];
+        let defaultUserPassword = 'password';
+
+        function parseMultiValues(value) {
+            return String(value || '')
+                .split(/[\n,;|]+/)
+                .map((v) => v.trim())
+                .filter(Boolean);
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function setupTabs() {
+            document.querySelectorAll('.tab-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById(btn.dataset.tab).classList.add('active');
+                });
+            });
+        }
+
+        async function loadSubjects() {
+            try {
+                const data = await api.get('/subjects?limit=500');
+                subjects = data.subjects || [];
+                renderSubjectPickers();
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+            }
+        }
+
+        function getSubjectById(subjectId) {
+            return subjects.find((s) => String(s._id) === String(subjectId));
+        }
+
+        function renderAssignedSubjects() {
+            const term = String(document.getElementById('facultyAssignedSearch')?.value || '').toLowerCase().trim();
+            const tbody = document.getElementById('facultyAssignedSubjectsBody');
+            if (!tbody) return;
+
+            const assigned = selectedSubjectIds
+                .map((id) => getSubjectById(id))
+                .filter(Boolean)
+                .filter((s) => {
+                    if (!term) return true;
+                    return String(s.subjectName || '').toLowerCase().includes(term)
+                        || String(s.subjectCode || '').toLowerCase().includes(term);
+                });
+
+            if (!assigned.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">No assigned subjects</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = assigned.map((s) => `
+                <tr>
+                    <td>${s.subjectName}</td>
+                    <td>${s.subjectCode || '-'}</td>
+                    <td><button type="button" class="btn btn-small btn-danger" data-action="remove" data-id="${s._id}">Remove</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAvailableSubjects() {
+            const term = String(document.getElementById('facultyAvailableSearch')?.value || '').toLowerCase().trim();
+            const tbody = document.getElementById('facultyAvailableSubjectsBody');
+            if (!tbody) return;
+
+            const selectedSet = new Set(selectedSubjectIds.map((id) => String(id)));
+            const available = subjects.filter((s) => {
+                if (selectedSet.has(String(s._id))) return false;
+                if (!term) return true;
+                return String(s.subjectName || '').toLowerCase().includes(term)
+                    || String(s.subjectCode || '').toLowerCase().includes(term);
+            });
+
+            if (!available.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">No matching subjects found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = available.map((s) => `
+                <tr>
+                    <td>${s.subjectName}</td>
+                    <td>${s.subjectCode || '-'}</td>
+                    <td><button type="button" class="btn btn-small btn-primary" data-action="add" data-id="${s._id}">Add</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderSubjectPickers() {
+            renderAssignedSubjects();
+            renderAvailableSubjects();
+        }
+
+        function setupLogout() {
+            document.getElementById('logoutBtn').addEventListener('click', (e) => {
+                e.preventDefault();
+                clearAuth();
+                window.location.href = 'login.html';
+            });
+        }
+
+        async function loadDefaultPassword() {
+            try {
+                const data = await api.get('/settings/admin-config');
+                const value = String(data?.defaultUserPassword || '').trim();
+                defaultUserPassword = value || 'password';
+            } catch (_error) {
+                defaultUserPassword = 'password';
+            }
+
+            const display = document.getElementById('facultyDefaultPasswordValue');
+            if (display) display.textContent = defaultUserPassword;
+        }
+
+        function parseCsvRows(csv) {
+            const lines = csv.trim().split(/\r?\n/);
+            if (lines.length < 2) return [];
+            const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+
+            const rows = [];
+            for (let i = 1; i < lines.length; i += 1) {
+                if (!lines[i].trim()) continue;
+                const values = lines[i].split(',').map((v) => v.trim());
+                const row = {};
+                headers.forEach((h, idx) => {
+                    row[h] = values[idx] || '';
+                });
+                row.parentPhones = parseMultiValues(row.parentphones || row.parentphone || '');
+                row.assignedSubjectCodes = parseMultiValues(row.assignedsubjectcodes || row.assignedsubjects || row.subjectcodes || '').map((v) => v.toUpperCase());
+                rows.push(row);
+            }
+            return rows;
+        }
+
+        async function processBulkFaculty() {
+            const csvData = document.getElementById('facultyCsvData').value;
+            if (!csvData.trim()) {
+                alert('Please paste CSV data');
+                return;
+            }
+
+            const faculty = parseCsvRows(csvData);
+            if (!faculty.length) {
+                alert('No valid rows found');
+                return;
+            }
+
+            try {
+                const result = await api.post('/auth/faculty/bulk', { faculty });
+                const wrap = document.getElementById('facultyBulkResults');
+                const content = document.getElementById('facultyResultsContent');
+                wrap.style.display = 'block';
+
+                let html = `<p class="success">Successfully added: ${result.results.success.length} faculty</p>`;
+                if (result.results.failed.length) {
+                    html += `<p class="error">Failed: ${result.results.failed.length}</p><ul>`;
+                    result.results.failed.forEach((f) => {
+                        html += `<li>${f.email}: ${f.reason}</li>`;
+                    });
+                    html += '</ul>';
+                }
+                content.innerHTML = html;
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!currentUser || currentUser.role !== 'admin') {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userAvatar').textContent = currentUser.name.charAt(0).toUpperCase();
+
+            setupTabs();
+            setupLogout();
+            await loadSubjects();
+            await loadDefaultPassword();
+
+            document.getElementById('facultyAssignedSearch')?.addEventListener('input', renderAssignedSubjects);
+            document.getElementById('facultyAvailableSearch')?.addEventListener('input', renderAvailableSubjects);
+            document.getElementById('facultyAvailableSearch')?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    renderAvailableSubjects();
+                }
+            });
+            document.getElementById('facultySearchBtn')?.addEventListener('click', renderAvailableSubjects);
+
+            document.getElementById('facultyAssignedSubjectsBody')?.addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-action="remove"]');
+                if (!btn) return;
+                const subjectId = btn.getAttribute('data-id');
+                selectedSubjectIds = selectedSubjectIds.filter((id) => String(id) !== String(subjectId));
+                renderSubjectPickers();
+            });
+
+            document.getElementById('facultyAvailableSubjectsBody')?.addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-action="add"]');
+                if (!btn) return;
+                const subjectId = btn.getAttribute('data-id');
+                if (!selectedSubjectIds.some((id) => String(id) === String(subjectId))) {
+                    selectedSubjectIds.push(subjectId);
+                }
+                renderSubjectPickers();
+            });
+
+            document.getElementById('addFacultyForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const payload = {
+                    name: document.getElementById('facultyName').value.trim(),
+                    email: document.getElementById('facultyEmail').value.trim(),
+                    uniqueId: document.getElementById('facultyUniqueId').value.trim(),
+                    department: document.getElementById('facultyDepartment').value.trim(),
+                    phone: document.getElementById('facultyPhone').value.trim(),
+                    parentEmail: document.getElementById('facultyParentEmail').value.trim(),
+                    parentPhones: parseMultiValues(document.getElementById('facultyParentPhones').value),
+                    dob: document.getElementById('facultyDob').value,
+                    assignedSubjects: selectedSubjectIds
+                };
+
+                try {
+                    await api.post('/auth/faculty/add', payload);
+                    alert(`Faculty added successfully! Default password: ${defaultUserPassword}`);
+                    document.getElementById('addFacultyForm').reset();
+                    selectedSubjectIds = [];
+                    renderSubjectPickers();
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

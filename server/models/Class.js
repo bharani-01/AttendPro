@@ -24,6 +24,12 @@ const classSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  lowAttendanceThreshold: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: null
+  },
   students: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

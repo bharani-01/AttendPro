@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendPro Info Dashboard</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .info-wrap { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        .info-top { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 16px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .kpi-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 14px; box-shadow: var(--shadow-sm); }
+        .kpi-label { font-size: 12px; color: var(--gray-500); margin-bottom: 6px; }
+        .kpi-value { font-size: 20px; font-weight: 700; color: var(--dark); }
+        .panel { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 14px; box-shadow: var(--shadow-sm); margin-bottom: 12px; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+        .status-ok { background: #10b981; }
+        .status-warn { background: #f59e0b; }
+        .status-bad { background: #ef4444; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; font-size: 13px; border-bottom: 1px solid var(--gray-200); padding: 8px 6px; }
+        th { color: var(--gray-600); font-weight: 600; }
+        .actions { display: flex; gap: 8px; }
+        .advanced-wrap { display: none; }
+        .advanced-wrap.active { display: block; }
+        .advanced-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+        .graph-canvas { width: 100%; height: 240px; border: 1px solid var(--gray-200); border-radius: 8px; background: #fcfdff; }
+        @media (max-width: 900px) { .advanced-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="info-wrap">
+        <div class="info-top">
+            <div>
+                <h2>AttendPro Public Info</h2>
+                <p style="color:var(--gray-500);">Operational metrics only. No private data exposed.</p>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" id="advancedBtn">Advanced Mode</button>
+                <button class="btn btn-secondary" id="refreshBtn">Refresh</button>
+                <button class="btn btn-danger" id="resetBtn">Reset Metrics</button>
+            </div>
+        </div>
+
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="panel">
+            <h3 style="margin-bottom: 8px;">Database & Runtime</h3>
+            <div id="runtimeMeta"></div>
+        </div>
+
+        <div class="panel">
+            <h3 style="margin-bottom: 8px;">Route Usage (Top 25)</h3>
+            <div style="overflow:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Route</th>
+                            <th>Calls</th>
+                            <th>Req Bytes</th>
+                            <th>Res Bytes</th>
+                            <th>Avg Latency</th>
+                            <th>2xx/4xx/5xx</th>
+                            <th>Last Status</th>
+                            <th>Last Called</th>
+                        </tr>
+                    </thead>
+                    <tbody id="routesBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="advanced-wrap" id="advancedWrap">
+            <div class="panel">
+                <h3 style="margin-bottom: 8px;">Advanced DB Access Mode</h3>
+                <p style="color:var(--gray-500); margin-bottom: 10px;">Live DB latency samples from server ping checks.</p>
+                <div class="advanced-grid">
+                    <div>
+                        <canvas id="dbLatencyCanvas" class="graph-canvas" width="920" height="240"></canvas>
+                    </div>
+                    <div id="dbAdvancedMeta"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/info.js"></script>
+</body>
+</html>

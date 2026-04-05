@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -11,6 +10,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../../../core/config/app_config.dart';
 import '../../auth/presentation/session_controller.dart';
+import '../domain/student_models.dart';
 import 'tabs/student_announcements_tab.dart';
 import 'tabs/student_attendance_tab.dart';
 import 'tabs/student_overview_tab.dart';
@@ -26,7 +26,10 @@ class StudentAppScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentAppScreenState extends ConsumerState<StudentAppScreen> {
-  static final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  static final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  final GlobalKey<_QuickQrCheckinCardState> _quickQrCardKey =
+      GlobalKey<_QuickQrCheckinCardState>();
 
   io.Socket? _notificationSocket;
   bool _notificationReady = false;
@@ -40,12 +43,16 @@ class _StudentAppScreenState extends ConsumerState<StudentAppScreen> {
   }
 
   Future<void> _initNotificationsAndRealtime() async {
-    final androidSettings = const AndroidInitializationSettings('@mipmap/ic_launcher');
+    final androidSettings = const AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     final initSettings = InitializationSettings(android: androidSettings);
     await _localNotifications.initialize(initSettings);
 
     final androidPlugin = _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await androidPlugin?.requestNotificationsPermission();
 
     _notificationReady = true;
@@ -54,12 +61,14 @@ class _StudentAppScreenState extends ConsumerState<StudentAppScreen> {
 
   void _connectNotificationSocket() {
     final token = ref.read(studentAccessTokenProvider);
-    final currentUserId = ref.read(sessionControllerProvider).session?.user.id ?? '';
+    final currentUserId =
+        ref.read(sessionControllerProvider).session?.user.id ?? '';
 
     if (token == null || token.isEmpty || currentUserId.isEmpty) return;
 
     final apiUri = Uri.parse(AppConfig.apiBaseUrl);
-    final socketBase = '${apiUri.scheme}://${apiUri.host}${apiUri.hasPort ? ':${apiUri.port}' : ''}';
+    final socketBase =
+        '${apiUri.scheme}://${apiUri.host}${apiUri.hasPort ? ':${apiUri.port}' : ''}';
 
     final socket = io.io(
       socketBase,
@@ -74,7 +83,9 @@ class _StudentAppScreenState extends ConsumerState<StudentAppScreen> {
     socket.on('message:new', (data) {
       if (!mounted) return;
 
-      final payload = data is Map ? Map<String, dynamic>.from(data as Map) : <String, dynamic>{};
+      final payload = data is Map
+          ? Map<String, dynamic>.from(data)
+          : <String, dynamic>{};
       final message = payload['message'] is Map
           ? Map<String, dynamic>.from(payload['message'] as Map)
           : <String, dynamic>{};
@@ -98,7 +109,10 @@ class _StudentAppScreenState extends ConsumerState<StudentAppScreen> {
     _notificationSocket = socket;
   }
 
-  Future<void> _showIncomingMessageNotification(String senderName, String content) async {
+  Future<void> _showIncomingMessageNotification(
+    String senderName,
+    String content,
+  ) async {
     if (!_notificationReady) return;
 
     const details = NotificationDetails(
@@ -130,7 +144,15 @@ class _StudentAppScreenState extends ConsumerState<StudentAppScreen> {
     final user = ref.watch(sessionControllerProvider).session?.user;
 
     final pages = <Widget>[
-      StudentOverviewTab(quickQrWidget: const _QuickQrCheckinCard()),
+      StudentOverviewTab(
+        quickQrWidget: _QuickQrCheckinCard(key: _quickQrCardKey),
+        onQuickScanQr: () {
+          _quickQrCardKey.currentState?.startScanFromShortcut();
+        },
+        onOpenTab: (tabIndex) {
+          setState(() => _index = tabIndex);
+        },
+      ),
       const StudentAttendanceTab(),
       const StudentTimetableTab(),
       const StudentAnnouncementsTab(),
@@ -160,28 +182,50 @@ class _StudentAppScreenState extends ConsumerState<StudentAppScreen> {
           ),
           IconButton(
             tooltip: 'Logout',
-            onPressed: () => ref.read(sessionControllerProvider.notifier).logout(),
+            onPressed: () =>
+                ref.read(sessionControllerProvider.notifier).logout(),
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 180),
-        child: KeyedSubtree(
-          key: ValueKey<int>(_index),
-          child: pages[_index],
-        ),
+        child: KeyedSubtree(key: ValueKey<int>(_index), child: pages[_index]),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.analytics_outlined), selectedIcon: Icon(Icons.analytics), label: 'Attendance'),
-          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month), label: 'Timetable'),
-          NavigationDestination(icon: Icon(Icons.campaign_outlined), selectedIcon: Icon(Icons.campaign), label: 'Notices'),
-          NavigationDestination(icon: Icon(Icons.forum_outlined), selectedIcon: Icon(Icons.forum), label: 'Messages'),
-          NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Leave'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
+            label: 'Attendance',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month),
+            label: 'Timetable',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.campaign_outlined),
+            selectedIcon: Icon(Icons.campaign),
+            label: 'Notices',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.forum_outlined),
+            selectedIcon: Icon(Icons.forum),
+            label: 'Messages',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_outlined),
+            selectedIcon: Icon(Icons.assignment),
+            label: 'Leave',
+          ),
         ],
       ),
     );
@@ -225,106 +269,209 @@ class _LeaveTab extends ConsumerStatefulWidget {
   ConsumerState<_LeaveTab> createState() => _LeaveTabState();
 }
 
-class _MessagesTab extends ConsumerWidget {
+class _MessagesTab extends ConsumerStatefulWidget {
   const _MessagesTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final usersAsync = ref.watch(studentMessagableUsersProvider);
+  ConsumerState<_MessagesTab> createState() => _MessagesTabState();
+}
+
+class _MessagesTabState extends ConsumerState<_MessagesTab> {
+  String _contactSearch = '';
+
+  @override
+  Widget build(BuildContext context) {
     final conversationsAsync = ref.watch(studentConversationsProvider);
 
     return StudentTabContainer(
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-        _SectionCard(
-          title: 'Faculty Contacts',
-          child: usersAsync.when(
-            data: (users) {
-              if (users.isEmpty) {
-                return const Text('No contacts found');
-              }
-
-              return Column(
-                children: users.map((u) {
-                  return ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(u.name),
-                    subtitle: Text(u.email),
-                    trailing: FilledButton.tonal(
-                      onPressed: () => _openChat(context, ref, u.id, u.name),
-                      child: const Text('Chat'),
-                    ),
-                  );
-                }).toList(growable: false),
-              );
-            },
-            loading: () => const _Loading(),
-            error: (e, _) => _ErrorText(message: e.toString()),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: () => _showNewConversationSheet(context),
+              icon: const Icon(Icons.add_comment_outlined),
+              label: const Text('New Conversation'),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          title: 'Recent Conversations',
-          child: conversationsAsync.when(
-            data: (conversations) {
-              if (conversations.isEmpty) {
-                return const Text('No conversations yet');
-              }
+          const SizedBox(height: 12),
+          _SectionCard(
+            title: 'Recent Conversations',
+            child: conversationsAsync.when(
+              data: (conversations) {
+                if (conversations.isEmpty) {
+                  return const Text('No conversations yet');
+                }
 
-              return Column(
-                children: conversations.map((c) {
-                  return ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(c.displayName),
-                    subtitle: Text(c.lastMessage.isEmpty ? 'No messages yet' : c.lastMessage),
-                    onTap: () {
-                      if (c.otherParticipantId.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Unable to open this conversation. Start from contacts once.'),
-                            backgroundColor: Colors.red,
+                return Column(
+                  children: conversations
+                      .map((c) {
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(c.displayName),
+                          subtitle: Text(
+                            c.lastMessage.isEmpty
+                                ? 'No messages yet'
+                                : c.lastMessage,
                           ),
+                          onTap: () {
+                            if (c.otherParticipantId.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Unable to open this conversation. Start from contacts once.',
+                                  ),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                            _openChat(
+                              context,
+                              c.otherParticipantId,
+                              c.displayName,
+                            );
+                          },
+                          trailing: c.unreadCount > 0
+                              ? CircleAvatar(
+                                  radius: 12,
+                                  child: Text(
+                                    c.unreadCount.toString(),
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                )
+                              : null,
                         );
-                        return;
-                      }
-                      _openChat(context, ref, c.otherParticipantId, c.displayName);
-                    },
-                    trailing: c.unreadCount > 0
-                        ? CircleAvatar(
-                            radius: 12,
-                            child: Text(c.unreadCount.toString(), style: const TextStyle(fontSize: 11)),
-                          )
-                        : null,
-                  );
-                }).toList(growable: false),
-              );
-            },
-            loading: () => const _Loading(),
-            error: (e, _) => _ErrorText(message: e.toString()),
+                      })
+                      .toList(growable: false),
+                );
+              },
+              loading: () => const _Loading(),
+              error: (e, _) => _ErrorText(message: e.toString()),
+            ),
           ),
-        ),
         ],
       ),
     );
   }
 
-  Future<void> _openChat(BuildContext context, WidgetRef ref, String receiverId, String receiverName) async {
+  Future<void> _showNewConversationSheet(BuildContext context) async {
+    _contactSearch = '';
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: 16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * 0.72,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Start New Conversation',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Search by name or email',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (value) {
+                    setState(() => _contactSearch = value.trim().toLowerCase());
+                  },
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      final usersAsync = ref.watch(
+                        studentMessagableUsersProvider,
+                      );
+                      return usersAsync.when(
+                        data: (users) {
+                          final filtered = users
+                              .where((u) {
+                                if (_contactSearch.isEmpty) return true;
+                                return u.name.toLowerCase().contains(
+                                      _contactSearch,
+                                    ) ||
+                                    u.email.toLowerCase().contains(
+                                      _contactSearch,
+                                    ) ||
+                                    u.role.toLowerCase().contains(
+                                      _contactSearch,
+                                    );
+                              })
+                              .toList(growable: false);
+
+                          if (filtered.isEmpty) {
+                            return const Center(child: Text('No users found'));
+                          }
+
+                          return ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final user = filtered[index];
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(user.name),
+                                subtitle: Text('${user.role} | ${user.email}'),
+                                trailing: const Icon(Icons.chat_bubble_outline),
+                                onTap: () async {
+                                  Navigator.of(sheetContext).pop();
+                                  await _openChat(context, user.id, user.name);
+                                },
+                              );
+                            },
+                          );
+                        },
+                        loading: () => const _Loading(),
+                        error: (e, _) => _ErrorText(message: e.toString()),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openChat(
+    BuildContext context,
+    String receiverId,
+    String receiverName,
+  ) async {
     final token = ref.read(studentAccessTokenProvider);
     if (token == null || token.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session expired. Please login again.'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Session expired. Please login again.'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
     try {
-      final conversationId = await ref.read(studentRepositoryProvider).getOrCreateConversation(
-            accessToken: token,
-            receiverId: receiverId,
-          );
+      final conversationId = await ref
+          .read(studentRepositoryProvider)
+          .getOrCreateConversation(accessToken: token, receiverId: receiverId);
 
       if (!context.mounted) return;
 
@@ -342,7 +489,10 @@ class _MessagesTab extends ConsumerWidget {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -380,7 +530,8 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
     if (token == null || token.isEmpty) return;
 
     final apiUri = Uri.parse(AppConfig.apiBaseUrl);
-    final socketBase = '${apiUri.scheme}://${apiUri.host}${apiUri.hasPort ? ':${apiUri.port}' : ''}';
+    final socketBase =
+        '${apiUri.scheme}://${apiUri.host}${apiUri.hasPort ? ':${apiUri.port}' : ''}';
 
     final socket = io.io(
       socketBase,
@@ -401,7 +552,9 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
     socket.on('message:new', (data) {
       if (!mounted) return;
 
-      final map = data is Map ? Map<String, dynamic>.from(data as Map) : <String, dynamic>{};
+      final map = data is Map
+          ? Map<String, dynamic>.from(data)
+          : <String, dynamic>{};
       final convoId = (map['conversationId'] ?? '').toString();
 
       if (convoId == widget.conversationId) {
@@ -413,7 +566,9 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
     socket.on('message:read', (data) {
       if (!mounted) return;
 
-      final map = data is Map ? Map<String, dynamic>.from(data as Map) : <String, dynamic>{};
+      final map = data is Map
+          ? Map<String, dynamic>.from(data)
+          : <String, dynamic>{};
       final convoId = (map['conversationId'] ?? '').toString();
       if (convoId == widget.conversationId) {
         ref.invalidate(studentMessagesProvider(widget.conversationId));
@@ -446,16 +601,20 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final asyncMessages = ref.watch(studentMessagesProvider(widget.conversationId));
+    final asyncMessages = ref.watch(
+      studentMessagesProvider(widget.conversationId),
+    );
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final currentUserId = ref.watch(sessionControllerProvider).session?.user.id ?? '';
+    final currentUserId =
+        ref.watch(sessionControllerProvider).session?.user.id ?? '';
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.receiverName),
         actions: [
           IconButton(
-            onPressed: () => ref.invalidate(studentMessagesProvider(widget.conversationId)),
+            onPressed: () =>
+                ref.invalidate(studentMessagesProvider(widget.conversationId)),
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -482,20 +641,29 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
                       final m = messages[index];
                       final isMine = m.senderId == currentUserId;
                       return Align(
-                        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment: isMine
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: isMine ? Colors.blue.shade100 : Colors.blueGrey.shade50,
+                            color: isMine
+                                ? Colors.blue.shade100
+                                : Colors.blueGrey.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Column(
-                            crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            crossAxisAlignment: isMine
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
                             children: [
                               Text(
                                 m.senderName,
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(m.content),
@@ -504,15 +672,24 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    m.createdAt == null ? '--:--' : DateFormat('hh:mm a').format(m.createdAt!),
-                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                                    m.createdAt == null
+                                        ? '--:--'
+                                        : DateFormat(
+                                            'hh:mm a',
+                                          ).format(m.createdAt!),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade700,
+                                    ),
                                   ),
                                   if (isMine) ...[
                                     const SizedBox(width: 4),
                                     Icon(
                                       m.isRead ? Icons.done_all : Icons.check,
                                       size: 15,
-                                      color: m.isRead ? Colors.blue : Colors.grey,
+                                      color: m.isRead
+                                          ? Colors.blue
+                                          : Colors.grey,
                                     ),
                                   ],
                                 ],
@@ -536,7 +713,12 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
-          padding: EdgeInsets.fromLTRB(10, 10, 10, keyboardInset > 0 ? keyboardInset : 10),
+          padding: EdgeInsets.fromLTRB(
+            10,
+            10,
+            10,
+            keyboardInset > 0 ? keyboardInset : 10,
+          ),
           decoration: BoxDecoration(
             border: Border(top: BorderSide(color: Colors.grey.shade300)),
             color: Theme.of(context).scaffoldBackgroundColor,
@@ -546,15 +728,29 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
               Expanded(
                 child: TextField(
                   controller: _messageController,
+                  enabled: !_sending,
                   minLines: 1,
                   maxLines: 3,
-                  decoration: const InputDecoration(hintText: 'Type message...'),
+                  decoration: const InputDecoration(
+                    hintText: 'Type message...',
+                  ),
+                  onSubmitted: (_) {
+                    if (!_sending) {
+                      _send();
+                    }
+                  },
                 ),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: _sending ? null : _send,
-                child: Text(_sending ? '...' : 'Send'),
+                child: _sending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send),
               ),
             ],
           ),
@@ -572,7 +768,9 @@ class _ChatPageState extends ConsumerState<_ChatPage> {
 
     setState(() => _sending = true);
     try {
-      await ref.read(studentRepositoryProvider).sendMessage(
+      await ref
+          .read(studentRepositoryProvider)
+          .sendMessage(
             accessToken: token,
             conversationId: widget.conversationId,
             receiverId: widget.receiverId,
@@ -613,136 +811,162 @@ class _LeaveTabState extends ConsumerState<_LeaveTab> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-        _SectionCard(
-          title: 'Request Leave',
-          child: profileAsync.when(
-            data: (profile) {
-              final subjectOptions = _buildLeaveSubjects(
-                profile: profile,
-                classSubjects: classSubjectsAsync.valueOrNull,
-                summary: summaryAsync.valueOrNull,
-              );
+          _SectionCard(
+            title: 'Request Leave',
+            child: profileAsync.when(
+              data: (profile) {
+                final subjectOptions = _buildLeaveSubjects(
+                  profile: profile,
+                  classSubjects: classSubjectsAsync.valueOrNull,
+                  summary: summaryAsync.valueOrNull,
+                );
 
-              if (subjectOptions.isNotEmpty) {
-                final containsCurrent = _subjectId != null && subjectOptions.any((s) => s.id == _subjectId);
-                if (!containsCurrent) {
-                  _subjectId = subjectOptions.first.id;
+                if (subjectOptions.isNotEmpty) {
+                  final containsCurrent =
+                      _subjectId != null &&
+                      subjectOptions.any((s) => s.id == _subjectId);
+                  if (!containsCurrent) {
+                    _subjectId = subjectOptions.first.id;
+                  }
+                } else {
+                  _subjectId = null;
                 }
-              } else {
-                _subjectId = null;
-              }
 
-              return Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: _subjectId,
-                      decoration: InputDecoration(
-                        labelText: 'Subject',
-                        helperText: subjectOptions.isEmpty
-                            ? 'No subjects available. Attend at least one class or contact faculty/admin.'
+                return Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      DropdownButtonFormField<String>(
+                        initialValue: _subjectId,
+                        decoration: InputDecoration(
+                          labelText: 'Subject',
+                          helperText: subjectOptions.isEmpty
+                              ? 'No subjects available. Attend at least one class or contact faculty/admin.'
+                              : null,
+                        ),
+                        items: subjectOptions
+                            .map(
+                              (s) => DropdownMenuItem(
+                                value: s.id,
+                                child: Text(
+                                  '${s.subjectName} (${s.subjectCode})',
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: subjectOptions.isEmpty
+                            ? null
+                            : (v) => setState(() => _subjectId = v),
+                        validator: (value) => value == null || value.isEmpty
+                            ? 'Subject is required'
                             : null,
                       ),
-                      items: subjectOptions
-                          .map(
-                            (s) => DropdownMenuItem(
-                              value: s.id,
-                              child: Text('${s.subjectName} (${s.subjectCode})'),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime.now().subtract(
+                                    const Duration(days: 1),
+                                  ),
+                                  lastDate: DateTime.now().add(
+                                    const Duration(days: 365),
+                                  ),
+                                );
+                                if (picked != null) {
+                                  setState(() => _selectedDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.date_range),
+                              label: Text(
+                                DateFormat('dd MMM yyyy').format(_selectedDate),
+                              ),
                             ),
-                          )
-                          .toList(growable: false),
-                      onChanged: subjectOptions.isEmpty
-                          ? null
-                          : (v) => setState(() => _subjectId = v),
-                      validator: (value) => value == null || value.isEmpty ? 'Subject is required' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: _selectedDate,
-                                firstDate: DateTime.now().subtract(const Duration(days: 1)),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
-                              );
-                              if (picked != null) {
-                                setState(() => _selectedDate = picked);
-                              }
-                            },
-                            icon: const Icon(Icons.date_range),
-                            label: Text(DateFormat('dd MMM yyyy').format(_selectedDate)),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            initialValue: _period,
-                            decoration: const InputDecoration(labelText: 'Period'),
-                            items: List.generate(
-                              7,
-                              (i) => DropdownMenuItem(value: i + 1, child: Text('Period ${i + 1}')),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              initialValue: _period,
+                              decoration: const InputDecoration(
+                                labelText: 'Period',
+                              ),
+                              items: List.generate(
+                                7,
+                                (i) => DropdownMenuItem(
+                                  value: i + 1,
+                                  child: Text('Period ${i + 1}'),
+                                ),
+                              ),
+                              onChanged: (v) =>
+                                  setState(() => _period = v ?? 1),
                             ),
-                            onChanged: (v) => setState(() => _period = v ?? 1),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _reasonController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(labelText: 'Reason'),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Reason is required';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _saving || subjectOptions.isEmpty
+                            ? null
+                            : () => _submitLeaveRequest(profile.classId),
+                        child: Text(
+                          _saving ? 'Submitting...' : 'Submit Leave Request',
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _reasonController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(labelText: 'Reason'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Reason is required';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _saving || subjectOptions.isEmpty
-                          ? null
-                          : () => _submitLeaveRequest(profile.classId),
-                      child: Text(_saving ? 'Submitting...' : 'Submit Leave Request'),
-                    ),
-                  ],
-                ),
-              );
-            },
-            loading: () => const _Loading(),
-            error: (e, _) => _ErrorText(message: e.toString()),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              loading: () => const _Loading(),
+              error: (e, _) => _ErrorText(message: e.toString()),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          title: 'My Leave Requests',
-          child: leavesAsync.when(
-            data: (items) {
-              if (items.isEmpty) {
-                return const Text('No leave requests yet');
-              }
-              return Column(
-                children: items.map((item) {
-                  return ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('${item.subjectName} • Period ${item.period}'),
-                    subtitle: Text('${_dateOrDash(item.date)}\n${item.reason}${item.reviewComment.isEmpty ? '' : '\nComment: ${item.reviewComment}'}'),
-                    isThreeLine: true,
-                    trailing: _StatusChip(status: item.status),
-                  );
-                }).toList(growable: false),
-              );
-            },
-            loading: () => const _Loading(),
-            error: (e, _) => _ErrorText(message: e.toString()),
+          const SizedBox(height: 12),
+          _SectionCard(
+            title: 'My Leave Requests',
+            child: leavesAsync.when(
+              data: (items) {
+                if (items.isEmpty) {
+                  return const Text('No leave requests yet');
+                }
+                return Column(
+                  children: items
+                      .map((item) {
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '${item.subjectName} • Period ${item.period}',
+                          ),
+                          subtitle: Text(
+                            '${_dateOrDash(item.date)}\n${item.reason}${item.reviewComment.isEmpty ? '' : '\nComment: ${item.reviewComment}'}',
+                          ),
+                          isThreeLine: true,
+                          trailing: _StatusChip(status: item.status),
+                        );
+                      })
+                      .toList(growable: false),
+                );
+              },
+              loading: () => const _Loading(),
+              error: (e, _) => _ErrorText(message: e.toString()),
+            ),
           ),
-        ),
         ],
       ),
     );
@@ -764,7 +988,9 @@ class _LeaveTabState extends ConsumerState<_LeaveTab> {
 
     setState(() => _saving = true);
     try {
-      await ref.read(studentRepositoryProvider).submitLeaveRequest(
+      await ref
+          .read(studentRepositoryProvider)
+          .submitLeaveRequest(
             accessToken: token,
             classId: classId,
             subjectId: _subjectId!,
@@ -813,7 +1039,8 @@ class _LeaveTabState extends ConsumerState<_LeaveTab> {
       }
     }
 
-    final summaryItems = summary?.subjectSummary ?? const <SubjectAttendanceSummary>[];
+    final summaryItems =
+        summary?.subjectSummary ?? const <SubjectAttendanceSummary>[];
     for (final item in summaryItems) {
       final id = item.subjectId.trim();
       if (id.isEmpty || map.containsKey(id)) {
@@ -831,14 +1058,20 @@ class _LeaveTabState extends ConsumerState<_LeaveTab> {
 }
 
 class _QuickQrCheckinCard extends ConsumerStatefulWidget {
-  const _QuickQrCheckinCard();
+  const _QuickQrCheckinCard({super.key});
 
   @override
-  ConsumerState<_QuickQrCheckinCard> createState() => _QuickQrCheckinCardState();
+  ConsumerState<_QuickQrCheckinCard> createState() =>
+      _QuickQrCheckinCardState();
 }
 
 class _QuickQrCheckinCardState extends ConsumerState<_QuickQrCheckinCard> {
   bool _checking = false;
+
+  Future<void> startScanFromShortcut() async {
+    if (_checking) return;
+    await _scanAndCheckIn();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -847,19 +1080,26 @@ class _QuickQrCheckinCardState extends ConsumerState<_QuickQrCheckinCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Scan the faculty QR code. Attendance will be marked instantly.'),
+          const Text(
+            'Scan the faculty QR code. Attendance will be marked instantly.',
+          ),
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: _checking ? null : _scanAndCheckIn,
             icon: const Icon(Icons.qr_code_scanner),
-            label: Text(_checking ? 'Checking in...' : 'Scan QR and Mark Present'),
+            label: Text(
+              _checking ? 'Checking in...' : 'Scan QR and Mark Present',
+            ),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _checkIn({required String sessionId, required String qrToken}) async {
+  Future<void> _checkIn({
+    required String sessionId,
+    required String qrToken,
+  }) async {
     final token = ref.read(studentAccessTokenProvider);
     if (token == null || token.isEmpty) {
       _message('Session expired. Please login again.', isError: true);
@@ -868,7 +1108,9 @@ class _QuickQrCheckinCardState extends ConsumerState<_QuickQrCheckinCard> {
 
     setState(() => _checking = true);
     try {
-      final result = await ref.read(studentRepositoryProvider).checkInWithQrSession(
+      final result = await ref
+          .read(studentRepositoryProvider)
+          .checkInWithQrSession(
             accessToken: token,
             sessionId: sessionId,
             token: qrToken,
@@ -887,7 +1129,10 @@ class _QuickQrCheckinCardState extends ConsumerState<_QuickQrCheckinCard> {
 
   void _message(String text, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), backgroundColor: isError ? Colors.red : null),
+      SnackBar(
+        content: Text(text),
+        backgroundColor: isError ? Colors.red : null,
+      ),
     );
   }
 
@@ -928,16 +1173,28 @@ class _QuickQrCheckinCardState extends ConsumerState<_QuickQrCheckinCard> {
 
     final uri = Uri.tryParse(raw);
     if (uri != null && uri.queryParameters.isNotEmpty) {
-      final sessionId = (uri.queryParameters['session'] ?? uri.queryParameters['sessionId'] ?? '').trim();
-      final token = (uri.queryParameters['token'] ?? uri.queryParameters['qrToken'] ?? '').trim();
+      final sessionId =
+          (uri.queryParameters['session'] ??
+                  uri.queryParameters['sessionId'] ??
+                  '')
+              .trim();
+      final token =
+          (uri.queryParameters['token'] ?? uri.queryParameters['qrToken'] ?? '')
+              .trim();
       if (sessionId.isNotEmpty) {
         return _QrScanResult(sessionId: sessionId, token: token);
       }
     }
 
     // Support quick copy formats like "sessionId:xxx token:yyy".
-    final sessionMatch = RegExp(r'(sessionId|session)\s*[:=]\s*([A-Za-z0-9_-]+)', caseSensitive: false).firstMatch(raw);
-    final tokenMatch = RegExp(r'(qrToken|token)\s*[:=]\s*([A-Za-z0-9_-]+)', caseSensitive: false).firstMatch(raw);
+    final sessionMatch = RegExp(
+      r'(sessionId|session)\s*[:=]\s*([A-Za-z0-9_-]+)',
+      caseSensitive: false,
+    ).firstMatch(raw);
+    final tokenMatch = RegExp(
+      r'(qrToken|token)\s*[:=]\s*([A-Za-z0-9_-]+)',
+      caseSensitive: false,
+    ).firstMatch(raw);
     if (sessionMatch != null) {
       return _QrScanResult(
         sessionId: sessionMatch.group(2) ?? '',

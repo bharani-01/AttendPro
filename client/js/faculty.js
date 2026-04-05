@@ -7,6 +7,15 @@ let groupedAttendanceHistory = [];
 let weeklyClassesChart = null;
 let attendanceOverviewChart = null;
 
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     currentUser = checkAuth();
     if (!currentUser || currentUser.role !== 'faculty') {
@@ -580,7 +589,11 @@ async function loadStudentsForAttendance(silent = false) {
             `/attendance/class?classId=${classId}&subjectId=${subjectId}&date=${date}&period=${period}`
         );
 
-        const markedStudentIds = existingAttendance.attendances.map(a => a.student._id);
+        const attendanceByStudentId = new Map(
+            (existingAttendance.attendances || [])
+                .filter(a => a && a.student && a.student._id)
+                .map(a => [String(a.student._id), a.status])
+        );
 
         selectedAttendanceData = {
             classId,
@@ -589,9 +602,7 @@ async function loadStudentsForAttendance(silent = false) {
             period,
             students: students.map(s => ({
                 ...s,
-                status: markedStudentIds.includes(s._id) 
-                    ? existingAttendance.attendances.find(a => a.student._id === s._id).status 
-                    : 'unmarked'
+                status: attendanceByStudentId.get(String(s._id)) || 'unmarked'
             }))
         };
 
@@ -1357,21 +1368,45 @@ async function loadAnnouncements() {
         const banner = document.getElementById('announcementBanner');
         if (!banner) return;
         if (response.announcements && response.announcements.length > 0) {
-            banner.innerHTML = response.announcements.map(ann => `
-                <div class="announcement">
-                    <h4>${ann.title}</h4>
-                    <p>${ann.content}</p>
-                    <div class="announcement-meta">
-                        Posted by ${ann.createdBy?.name || 'Unknown'} on ${new Date(ann.createdAt).toLocaleDateString()}
-                    </div>
+            const announcements = response.announcements.slice(0, 3);
+            banner.innerHTML = `
+                <div class="announcement-banner-head">
+                    <h3>Latest Announcements</h3>
+                    <span class="announcement-count">${announcements.length}</span>
                 </div>
-            `).join('');
+                <div class="announcement-list-grid">
+                    ${announcements.map(ann => `
+                        <div class="announcement">
+                            <button type="button" class="announcement-close-btn" aria-label="Close announcement" onclick="dismissAnnouncementCard(this)">x</button>
+                            <h4>${escapeHtml(ann.title)}</h4>
+                            <p>${escapeHtml(ann.content)}</p>
+                            <div class="announcement-meta">
+                                Posted by ${escapeHtml(ann.createdBy?.name || 'Unknown')} on ${new Date(ann.createdAt).toLocaleDateString()}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="announcement-banner-actions">
+                    <a class="btn btn-secondary btn-small" href="announcements.html">View All</a>
+                </div>
+            `;
             banner.style.display = 'block';
         } else {
             banner.style.display = 'none';
         }
     } catch (error) {
         console.error('Failed to load announcements:', error);
+    }
+}
+
+function dismissAnnouncementCard(button) {
+    const card = button?.closest('.announcement');
+    const banner = document.getElementById('announcementBanner');
+    if (!card || !banner) return;
+
+    card.remove();
+    if (!banner.querySelector('.announcement')) {
+        banner.style.display = 'none';
     }
 }
 
@@ -1397,11 +1432,11 @@ async function loadTodaySchedule() {
             const li = document.createElement('li');
             li.className = `schedule-item ${item.isSubstitution ? 'substitution' : ''} ${item.isSubstituted ? 'substituted-away' : ''}`;
             li.innerHTML = `
-                <span class="period-time">Period ${item.period}</span>
-                <span class="subject-name">${item.subject.name}</span>
-                <span class="class-name">${item.class.name}</span>
-                ${item.isSubstitution ? `<span class="sub-info">${item.substitutionDetails}</span>` : ''}
-                ${item.isSubstituted ? `<span class="sub-info">${item.substitutionDetails}</span>` : ''}
+                <span class="period-time">Period ${escapeHtml(item.period)}</span>
+                <span class="subject-name">${escapeHtml(item.subject?.name)}</span>
+                <span class="class-name">${escapeHtml(item.class?.name)}</span>
+                ${item.isSubstitution ? `<span class="sub-info">${escapeHtml(item.substitutionDetails)}</span>` : ''}
+                ${item.isSubstituted ? `<span class="sub-info">${escapeHtml(item.substitutionDetails)}</span>` : ''}
             `;
             scheduleList.appendChild(li);
         });

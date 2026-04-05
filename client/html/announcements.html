@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Announcements - AttendPro</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+</head>
+<body class="announcements-page">
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <h3>AttendPro</h3>
+                    <span class="sidebar-badge" id="sidebarRoleBadge">User</span>
+                </div>
+            </div>
+            <ul class="nav-menu" id="roleNavMenu"></ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h2 class="page-title">Announcements</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <div class="user-info">
+                            <span class="user-name" id="userName">User</span>
+                            <span class="user-role" id="headerUserRole">User</span>
+                        </div>
+                        <div class="dropdown-content" id="userMenuDropdown">
+                            <a href="profile.html">Profile</a>
+                            <a href="#" id="logoutBtnDropdown">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-section active">
+                <div class="announcement-admin-panel" id="adminAnnouncementPanel" style="display:none;">
+                    <h3 class="section-title" id="composerTitle">Create Announcement</h3>
+                    <p class="announcement-composer-note" id="composerNote"></p>
+                    <form id="announcementForm" class="attendance-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="announcementTitle">Title</label>
+                                <input id="announcementTitle" type="text" placeholder="Exam schedule update" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="announcementExpiresAt">Expires At (optional)</label>
+                                <input id="announcementExpiresAt" type="datetime-local">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="announcementContent">Content</label>
+                            <textarea id="announcementContent" rows="4" placeholder="Write announcement details" required></textarea>
+                            <div class="announcement-template-bar" id="announcementTemplateBar">
+                                <span class="template-bar-label">Quick Templates:</span>
+                                <button type="button" class="template-chip" data-template="marks">Marks Updated</button>
+                                <button type="button" class="template-chip" data-template="assignment">Assignment Due</button>
+                                <button type="button" class="template-chip" data-template="holiday">Holiday Notice</button>
+                                <button type="button" class="template-chip" data-template="exam">Exam Alert</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Target Roles</label>
+                            <div class="announcement-role-chips">
+                                <label><input type="checkbox" name="targetRoles" value="all" checked> All</label>
+                                <label><input type="checkbox" name="targetRoles" value="admin"> Admin</label>
+                                <label><input type="checkbox" name="targetRoles" value="faculty"> Faculty</label>
+                                <label><input type="checkbox" name="targetRoles" value="student"> Student</label>
+                            </div>
+                            <small id="targetRolesHint" class="announcement-input-hint"></small>
+                        </div>
+                        <div class="form-group">
+                            <label for="announcementTargetClass">Target Class (optional)</label>
+                            <select id="announcementTargetClass">
+                                <option value="">All Classes</option>
+                            </select>
+                            <small id="targetClassHint" class="announcement-input-hint"></small>
+                        </div>
+                        <div class="announcement-admin-actions">
+                            <button type="submit" class="btn btn-primary">Publish Announcement</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="announcement-page-header">
+                    <h3 class="section-title">Latest Announcements</h3>
+                    <button id="refreshAnnouncementsBtn" class="btn btn-secondary" type="button">Refresh</button>
+                </div>
+
+                <div id="announcementAnalyticsSummary" class="announcement-analytics-summary" style="display:none;"></div>
+
+                <div id="announcementStatus" class="announcement-status"></div>
+                <div id="announcementList" class="announcement-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/announcements.js"></script>
+</body>
+</html>

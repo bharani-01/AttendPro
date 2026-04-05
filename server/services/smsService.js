@@ -48,7 +48,18 @@ async function sendSMSAlert(to, message) {
 
 async function sendAttendanceSMS(student, subject, className, date, status) {
   const message = `Attendance Alert: Your ward ${student.name} was marked ${status} for ${subject.subjectName} on ${new Date(date).toLocaleDateString()}. - Attendance Management System`;
-  
+
+  const parentPhones = Array.isArray(student.parentPhones)
+    ? student.parentPhones.filter(Boolean)
+    : [];
+
+  if (parentPhones.length > 0) {
+    for (const phone of parentPhones) {
+      await sendSMSAlert(phone, message);
+    }
+    return;
+  }
+
   if (student.parentPhone) {
     await sendSMSAlert(student.parentPhone, message);
   }

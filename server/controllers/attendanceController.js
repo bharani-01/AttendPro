@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
-const { Attendance, AuditLog, Class, User, Subject } = require('../models');
-const { sendAttendanceAlert } = require('../services/emailService');
+const { Attendance, AuditLog, Class, User, Subject, LowAttendanceEmailLog } = require('../models');
+const { sendAttendanceAlert, sendTemplatedEmail } = require('../services/emailService');
 const { sendAttendanceSMS } = require('../services/smsService');
 const { QRSession } = require('../models');
+const { evaluateAutomaticEmailPolicy, getAdminConfigSetting } = require('../services/emailPolicyService');
+const { logEmailEvent } = require('../services/emailEventService');
 
 function normalizeToUtcDay(dateValue) {
   const d = new Date(dateValue);
@@ -14,6 +16,127 @@ function buildUtcDayRange(dateValue) {
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
   return { start, end };
+}
+
+function normalizeCutoffDate(dateValue) {
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const d = new Date(parsed);
+  d.setUTCHours(23, 59, 59, 999);
+  return d;
+}
+
+async function buildLowAttendanceRows({ cutoffDate, threshold }) {
+  const requestedThreshold = threshold === undefined || threshold === null || threshold === ''
+    ? null
+    : Number(threshold);
+  const settings = await getAdminConfigSetting();
+  const configuredGlobalThreshold = Number(settings.attendanceRules.globalLowAttendanceThreshold || 75);
+
+  const globalThreshold = requestedThreshold !== null && Number.isFinite(requestedThreshold)
+    ? requestedThreshold
+    : configuredGlobalThreshold;
+
+  const aggregation = await Attendance.aggregate([
+    {
+      $match: {
+        date: { $lte: cutoffDate }
+      }
+    },
+    {
+      $group: {
+        _id: '$student',
+        totalClasses: { $sum: 1 },
+        presentClasses: {
+          $sum: {
+            $cond: [{ $eq: ['$status', 'present'] }, 1, 0]
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        student: '$_id',
+        totalClasses: 1,
+        presentClasses: 1,
+        attendancePercentage: {
+          $cond: {
+            if: { $gt: ['$totalClasses', 0] },
+            then: {
+              $multiply: [
+                { $divide: ['$presentClasses', '$totalClasses'] },
+                100
+              ]
+            },
+            else: 0
+          }
+        }
+      }
+    },
+    {
+      $sort: {
+        attendancePercentage: 1,
+        totalClasses: -1
+      }
+    }
+  ]);
+
+  const studentIds = aggregation.map((a) => a.student);
+  const students = await User.find({ _id: { $in: studentIds } })
+    .select('name email parentEmail uniqueId assignedClass')
+    .populate('assignedClass', 'className lowAttendanceThreshold');
+
+  const studentMap = new Map(students.map((s) => [String(s._id), s]));
+
+  const reportRows = aggregation
+    .map((item) => {
+      const student = studentMap.get(String(item.student));
+      if (!student) return null;
+
+      const recipientEmail = student.parentEmail || student.email || '';
+      if (!recipientEmail) return null;
+
+      const classThreshold = Number(student.assignedClass?.lowAttendanceThreshold);
+      const thresholdUsed = requestedThreshold !== null && Number.isFinite(requestedThreshold)
+        ? requestedThreshold
+        : (Number.isFinite(classThreshold) ? classThreshold : globalThreshold);
+
+      const attendancePercentage = Number(item.attendancePercentage.toFixed(2));
+      if (attendancePercentage >= thresholdUsed) return null;
+
+      return {
+        studentId: item.student,
+        studentName: student.name,
+        studentEmail: student.email || '',
+        parentEmail: student.parentEmail || '',
+        recipientEmail,
+        uniqueId: student.uniqueId || '',
+        className: student.assignedClass?.className || 'Unassigned',
+        totalClasses: item.totalClasses,
+        presentClasses: item.presentClasses,
+        thresholdUsed,
+        attendancePercentage
+      };
+    })
+    .filter(Boolean);
+
+  return reportRows;
+}
+
+async function enforceFacultyStudentScope(req, studentId) {
+  if (req.user.role !== 'faculty') return null;
+
+  if (!req.user.assignedClass) {
+    return 'Faculty account has no assigned class.';
+  }
+
+  const student = await User.findById(studentId).select('assignedClass');
+  if (!student || !student.assignedClass || String(student.assignedClass) !== String(req.user.assignedClass)) {
+    return 'You can only access attendance for students in your assigned class.';
+  }
+
+  return null;
 }
 
 const attendanceController = {
@@ -35,9 +158,19 @@ const attendanceController = {
       });
 
       if (existingAttendance) {
-        return res.status(400).json({ 
-          error: 'Attendance already marked for this student, subject, date, and period',
-          existingAttendance
+        existingAttendance.status = status;
+        existingAttendance.markedBy = req.user._id;
+        await existingAttendance.save();
+
+        const updatedAttendance = await Attendance.findById(existingAttendance._id)
+          .populate('student', 'name email')
+          .populate('subject', 'subjectName subjectCode')
+          .populate('class', 'className')
+          .populate('markedBy', 'name');
+
+        return res.status(200).json({
+          message: 'Attendance updated successfully',
+          attendance: updatedAttendance
         });
       }
 
@@ -103,6 +236,8 @@ const attendanceController = {
         failed: []
       };
 
+      const attendanceAbsentPolicy = await evaluateAutomaticEmailPolicy('attendanceAbsent');
+
       for (const data of attendanceData) {
         try {
           const attendanceDate = normalizeToUtcDay(data.date);
@@ -142,7 +277,72 @@ const attendanceController = {
             const classObj = await Class.findById(data.classId);
             
             if (student) {
-              sendAttendanceAlert(student, subject, classObj?.className || 'N/A', attendanceDate, data.status);
+              const recipientEmail = String(student.parentEmail || student.email || '').trim().toLowerCase();
+
+              if (!attendanceAbsentPolicy.allowed) {
+                await logEmailEvent({
+                  triggerKey: 'attendanceAbsent',
+                  templateKey: 'attendance_alert',
+                  recipientEmail,
+                  status: 'skipped',
+                  source: 'auto',
+                  actorUserId: req.user._id,
+                  errorMessage: attendanceAbsentPolicy.reason === 'within-quiet-hours'
+                    ? 'Skipped due to configured quiet hours'
+                    : 'Automatic email disabled by admin settings',
+                  metadata: {
+                    studentId: student._id,
+                    subjectId: data.subjectId,
+                    classId: data.classId,
+                    attendanceDate,
+                    period: parseInt(data.period),
+                    policyReason: attendanceAbsentPolicy.reason,
+                  },
+                });
+              } else if (!recipientEmail) {
+                await logEmailEvent({
+                  triggerKey: 'attendanceAbsent',
+                  templateKey: 'attendance_alert',
+                  recipientEmail,
+                  status: 'failed',
+                  source: 'auto',
+                  actorUserId: req.user._id,
+                  errorMessage: 'Recipient email is missing',
+                  metadata: {
+                    studentId: student._id,
+                    subjectId: data.subjectId,
+                    classId: data.classId,
+                    attendanceDate,
+                    period: parseInt(data.period),
+                  },
+                });
+              } else {
+                const emailSent = await sendAttendanceAlert(
+                  student,
+                  subject,
+                  classObj?.className || 'N/A',
+                  attendanceDate,
+                  data.status
+                );
+
+                await logEmailEvent({
+                  triggerKey: 'attendanceAbsent',
+                  templateKey: 'attendance_alert',
+                  recipientEmail,
+                  status: emailSent ? 'success' : 'failed',
+                  source: 'auto',
+                  actorUserId: req.user._id,
+                  errorMessage: emailSent ? '' : 'Email service returned failure',
+                  metadata: {
+                    studentId: student._id,
+                    subjectId: data.subjectId,
+                    classId: data.classId,
+                    attendanceDate,
+                    period: parseInt(data.period),
+                  },
+                });
+              }
+
               sendAttendanceSMS(student, subject, classObj?.className || 'N/A', attendanceDate, data.status);
             }
           }
@@ -184,9 +384,21 @@ const attendanceController = {
       const { studentId, subjectId, classId, startDate, endDate } = req.query;
       const query = {};
 
+      if (req.user.role === 'faculty') {
+        if (!req.user.assignedClass) {
+          return res.status(403).json({ error: 'Faculty account has no assigned class.' });
+        }
+
+        if (classId && String(classId) !== String(req.user.assignedClass)) {
+          return res.status(403).json({ error: 'You can only query attendance for your assigned class.' });
+        }
+
+        query.class = req.user.assignedClass;
+      }
+
       if (studentId) query.student = studentId;
       if (subjectId) query.subject = subjectId;
-      if (classId) query.class = classId;
+      if (classId && req.user.role !== 'faculty') query.class = classId;
       if (startDate || endDate) {
         query.date = {};
         if (startDate) query.date.$gte = new Date(startDate);
@@ -215,6 +427,11 @@ const attendanceController = {
       const studentId = req.params.studentId || req.user._id;
       const { subjectId, startDate, endDate } = req.query;
 
+      const scopeError = await enforceFacultyStudentScope(req, studentId);
+      if (scopeError) {
+        return res.status(403).json({ error: scopeError });
+      }
+
       const query = { student: studentId };
       if (subjectId) query.subject = subjectId;
       if (startDate || endDate) {
@@ -242,6 +459,11 @@ const attendanceController = {
     try {
       const studentId = req.params.studentId || req.user._id;
       const { startDate, endDate } = req.query;
+
+      const scopeError = await enforceFacultyStudentScope(req, studentId);
+      if (scopeError) {
+        return res.status(403).json({ error: scopeError });
+      }
 
       const matchQuery = { student: new mongoose.Types.ObjectId(studentId) };
       if (startDate || endDate) {
@@ -274,6 +496,18 @@ const attendanceController = {
         _id: { $in: subjects.map(s => s._id) }
       });
 
+      const student = await User.findById(studentId).select('assignedClass');
+      const [settings, assignedClass] = await Promise.all([
+        getAdminConfigSetting(),
+        student?.assignedClass
+          ? Class.findById(student.assignedClass).select('lowAttendanceThreshold')
+          : Promise.resolve(null),
+      ]);
+
+      const classThreshold = Number(assignedClass?.lowAttendanceThreshold);
+      const globalThreshold = Number(settings.attendanceRules.globalLowAttendanceThreshold || 75);
+      const effectiveThreshold = Number.isFinite(classThreshold) ? classThreshold : globalThreshold;
+
       const summary = subjects.map(s => {
         const subject = subjectDetails.find(sub => sub._id.toString() === s._id.toString());
         const attendancePercentage = s.totalClasses > 0 
@@ -288,7 +522,8 @@ const attendanceController = {
           present: s.present,
           absent: s.absent,
           attendancePercentage: parseFloat(attendancePercentage),
-          belowThreshold: parseFloat(attendancePercentage) < 75
+          thresholdUsed: effectiveThreshold,
+          belowThreshold: parseFloat(attendancePercentage) < effectiveThreshold
         };
       });
 
@@ -304,7 +539,8 @@ const attendanceController = {
           totalClasses,
           totalPresent,
           attendancePercentage: parseFloat(overallPercentage),
-          belowThreshold: parseFloat(overallPercentage) < 75
+          thresholdUsed: effectiveThreshold,
+          belowThreshold: parseFloat(overallPercentage) < effectiveThreshold
         }
       });
     } catch (error) {
@@ -489,6 +725,219 @@ const attendanceController = {
       });
 
       res.json({ report });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async getLowAttendanceReport(req, res) {
+    try {
+      const { cutoffDate, threshold } = req.query;
+      if (!cutoffDate) {
+        return res.status(400).json({ error: 'cutoffDate is required' });
+      }
+
+      const normalizedCutoffDate = normalizeCutoffDate(cutoffDate);
+      if (!normalizedCutoffDate) {
+        return res.status(400).json({ error: 'Invalid cutoffDate' });
+      }
+
+      const normalizedThreshold = threshold === undefined || threshold === null || threshold === ''
+        ? null
+        : Number(threshold);
+
+      if (normalizedThreshold !== null && (!Number.isFinite(normalizedThreshold) || normalizedThreshold < 0 || normalizedThreshold > 100)) {
+        return res.status(400).json({ error: 'threshold must be between 0 and 100' });
+      }
+
+      const rows = await buildLowAttendanceRows({
+        cutoffDate: normalizedCutoffDate,
+        threshold: normalizedThreshold
+      });
+
+      const sentLogs = await LowAttendanceEmailLog.find({
+        cutoffDate: normalizedCutoffDate,
+        student: { $in: rows.map((r) => r.studentId) },
+        sentAt: { $ne: null }
+      }).select('student sentAt');
+
+      const sentMap = new Map(sentLogs.map((log) => [String(log.student), log.sentAt]));
+
+      const report = rows.map((row) => ({
+        ...row,
+        emailSent: sentMap.has(String(row.studentId)),
+        sentAt: sentMap.get(String(row.studentId)) || null
+      }));
+
+      res.json({
+        cutoffDate: normalizedCutoffDate,
+        threshold: normalizedThreshold,
+        total: report.length,
+        sentCount: report.filter((r) => r.emailSent).length,
+        report
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async sendLowAttendanceEmails(req, res) {
+    try {
+      const {
+        cutoffDate,
+        threshold,
+        studentIds = [],
+        forceResend = false,
+        confirm = false
+      } = req.body || {};
+
+      if (!confirm) {
+        return res.status(400).json({ error: 'Please confirm before sending emails' });
+      }
+
+      if (!cutoffDate) {
+        return res.status(400).json({ error: 'cutoffDate is required' });
+      }
+
+      const normalizedCutoffDate = normalizeCutoffDate(cutoffDate);
+      if (!normalizedCutoffDate) {
+        return res.status(400).json({ error: 'Invalid cutoffDate' });
+      }
+
+      const normalizedThreshold = threshold === undefined || threshold === null || threshold === ''
+        ? null
+        : Number(threshold);
+
+      if (normalizedThreshold !== null && (!Number.isFinite(normalizedThreshold) || normalizedThreshold < 0 || normalizedThreshold > 100)) {
+        return res.status(400).json({ error: 'threshold must be between 0 and 100' });
+      }
+
+      const reportRows = await buildLowAttendanceRows({
+        cutoffDate: normalizedCutoffDate,
+        threshold: normalizedThreshold
+      });
+
+      const selectedSet = new Set((Array.isArray(studentIds) ? studentIds : []).map(String));
+      const targetRows = selectedSet.size
+        ? reportRows.filter((row) => selectedSet.has(String(row.studentId)))
+        : reportRows;
+
+      if (!targetRows.length) {
+        return res.json({
+          message: 'No students matched the selection',
+          sent: [],
+          skipped: [],
+          failed: []
+        });
+      }
+
+      const existingLogs = await LowAttendanceEmailLog.find({
+        cutoffDate: normalizedCutoffDate,
+        student: { $in: targetRows.map((row) => row.studentId) },
+        sentAt: { $ne: null }
+      }).select('student');
+
+      const alreadySentSet = new Set(existingLogs.map((log) => String(log.student)));
+
+      const sent = [];
+      const skipped = [];
+      const failed = [];
+
+      for (const row of targetRows) {
+        const studentId = String(row.studentId);
+
+        if (!forceResend && alreadySentSet.has(studentId)) {
+          skipped.push({ studentId, reason: 'Already sent for selected cutoff date' });
+          continue;
+        }
+
+        try {
+          const triggerKey = 'lowAttendanceAuto';
+          await sendTemplatedEmail({
+            to: row.recipientEmail,
+            templateKey: 'generic_notification',
+            subject: 'Low Attendance Alert',
+            variables: {
+              heading: 'Low Attendance Alert',
+              message: `Student ${row.studentName} currently has ${row.attendancePercentage}% attendance up to ${normalizedCutoffDate.toISOString().split('T')[0]}. Please take corrective action.`,
+              ctaText: 'View Attendance Portal',
+              ctaUrl: process.env.BASE_URL || 'http://localhost:3000/html/login.html'
+            }
+          });
+
+          await LowAttendanceEmailLog.findOneAndUpdate(
+            {
+              student: row.studentId,
+              cutoffDate: normalizedCutoffDate,
+              threshold: row.thresholdUsed
+            },
+            {
+              $set: {
+                totalClasses: row.totalClasses,
+                presentClasses: row.presentClasses,
+                attendancePercentage: row.attendancePercentage,
+                recipientEmail: row.recipientEmail,
+                sentAt: new Date(),
+                sentBy: req.user._id
+              }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+
+          sent.push({ studentId, email: row.recipientEmail });
+
+          await logEmailEvent({
+            triggerKey,
+            templateKey: 'generic_notification',
+            recipientEmail: row.recipientEmail,
+            status: 'success',
+            source: 'manual',
+            actorUserId: req.user._id,
+            metadata: {
+              studentId,
+              cutoffDate: normalizedCutoffDate,
+              thresholdUsed: row.thresholdUsed,
+            },
+          });
+        } catch (err) {
+          failed.push({ studentId, email: row.recipientEmail, reason: err.message });
+
+          await logEmailEvent({
+            triggerKey: 'lowAttendanceAuto',
+            templateKey: 'generic_notification',
+            recipientEmail: row.recipientEmail,
+            status: 'failed',
+            source: 'manual',
+            actorUserId: req.user._id,
+            errorMessage: err.message,
+            metadata: {
+              studentId,
+              cutoffDate: normalizedCutoffDate,
+              thresholdUsed: row.thresholdUsed,
+            },
+          });
+        }
+      }
+
+      await AuditLog.create({
+        userId: req.user._id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'UPDATE',
+        details: `Low attendance mail run for cutoff ${normalizedCutoffDate.toISOString().split('T')[0]}: sent=${sent.length}, skipped=${skipped.length}, failed=${failed.length}`,
+        entityType: 'ATTENDANCE',
+        ipAddress: req.ip || req.connection.remoteAddress || 'Unknown',
+        routePath: req.originalUrl,
+        userAgent: req.get('user-agent') || '',
+        status: failed.length ? 'FAILED' : 'SUCCESS'
+      });
+
+      res.json({
+        message: 'Low attendance email processing completed',
+        sent,
+        skipped,
+        failed
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

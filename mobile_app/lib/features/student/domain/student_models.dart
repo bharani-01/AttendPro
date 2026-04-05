@@ -6,6 +6,10 @@ class StudentProfile {
     required this.classId,
     required this.className,
     required this.subjects,
+    this.uniqueId,
+    this.department,
+    this.batch,
+    this.year,
   });
 
   final String id;
@@ -14,10 +18,16 @@ class StudentProfile {
   final String classId;
   final String className;
   final List<StudentSubject> subjects;
+  final String? uniqueId;
+  final String? department;
+  final String? batch;
+  final int? year;
 
   factory StudentProfile.fromJson(Map<String, dynamic> json) {
     final assignedClass = json['assignedClass'];
-    final classMap = assignedClass is Map<String, dynamic> ? assignedClass : <String, dynamic>{};
+    final classMap = assignedClass is Map<String, dynamic>
+        ? assignedClass
+        : <String, dynamic>{};
     final assignedSubjects = json['assignedSubjects'];
     final subjectsList = assignedSubjects is List ? assignedSubjects : const [];
 
@@ -27,6 +37,23 @@ class StudentProfile {
       email: (json['email'] ?? '').toString(),
       classId: (classMap['_id'] ?? '').toString(),
       className: (classMap['className'] ?? '').toString(),
+      uniqueId: (json['uniqueId'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['uniqueId'] ?? '').toString(),
+      department:
+          (json['department'] ?? classMap['department'] ?? '')
+              .toString()
+              .trim()
+              .isEmpty
+          ? null
+          : (json['department'] ?? classMap['department']).toString(),
+      batch:
+          (json['batch'] ?? classMap['batch'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['batch'] ?? classMap['batch']).toString(),
+      year:
+          (json['year'] as num?)?.toInt() ??
+          (classMap['year'] as num?)?.toInt(),
       subjects: subjectsList
           .whereType<Map<String, dynamic>>()
           .map(StudentSubject.fromJson)
@@ -72,7 +99,8 @@ class AttendanceOverall {
     return AttendanceOverall(
       totalClasses: (json['totalClasses'] as num?)?.toInt() ?? 0,
       totalPresent: (json['totalPresent'] as num?)?.toInt() ?? 0,
-      attendancePercentage: (json['attendancePercentage'] as num?)?.toDouble() ?? 0,
+      attendancePercentage:
+          (json['attendancePercentage'] as num?)?.toDouble() ?? 0,
     );
   }
 }
@@ -104,7 +132,8 @@ class SubjectAttendanceSummary {
       totalClasses: (json['totalClasses'] as num?)?.toInt() ?? 0,
       present: (json['present'] as num?)?.toInt() ?? 0,
       absent: (json['absent'] as num?)?.toInt() ?? 0,
-      attendancePercentage: (json['attendancePercentage'] as num?)?.toDouble() ?? 0,
+      attendancePercentage:
+          (json['attendancePercentage'] as num?)?.toDouble() ?? 0,
     );
   }
 }
@@ -145,6 +174,7 @@ class AttendanceRecord {
 class TimetableItem {
   const TimetableItem({
     required this.id,
+    required this.day,
     required this.period,
     required this.subjectName,
     required this.subjectCode,
@@ -154,6 +184,7 @@ class TimetableItem {
   });
 
   final String id;
+  final String day;
   final int period;
   final String subjectName;
   final String subjectCode;
@@ -168,10 +199,13 @@ class TimetableItem {
     final faculty = json['faculty'] is Map<String, dynamic>
         ? json['faculty'] as Map<String, dynamic>
         : <String, dynamic>{};
-    final cls = json['class'] is Map<String, dynamic> ? json['class'] as Map<String, dynamic> : <String, dynamic>{};
+    final cls = json['class'] is Map<String, dynamic>
+        ? json['class'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
     return TimetableItem(
       id: (json['_id'] ?? '').toString(),
+      day: (json['day'] ?? '').toString(),
       period: (json['period'] as num?)?.toInt() ?? 0,
       subjectName: (subject['subjectName'] ?? subject['name'] ?? '').toString(),
       subjectCode: (subject['subjectCode'] ?? '').toString(),
@@ -237,7 +271,9 @@ class LeaveRequestItem {
     final subject = json['subject'] is Map<String, dynamic>
         ? json['subject'] as Map<String, dynamic>
         : <String, dynamic>{};
-    final cls = json['class'] is Map<String, dynamic> ? json['class'] as Map<String, dynamic> : <String, dynamic>{};
+    final cls = json['class'] is Map<String, dynamic>
+        ? json['class'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
     return LeaveRequestItem(
       id: (json['_id'] ?? '').toString(),
@@ -302,13 +338,19 @@ class ConversationItem {
   final DateTime? updatedAt;
   final int unreadCount;
 
-  factory ConversationItem.fromJson(Map<String, dynamic> json, String currentUserId) {
-    final participants = json['participants'] is List ? json['participants'] as List : const [];
+  factory ConversationItem.fromJson(
+    Map<String, dynamic> json,
+    String currentUserId,
+  ) {
+    final participants = json['participants'] is List
+        ? json['participants'] as List
+        : const [];
     String displayName = 'Conversation';
     String otherParticipantId = '';
 
     for (final p in participants) {
-      if (p is Map<String, dynamic> && (p['_id'] ?? '').toString() != currentUserId) {
+      if (p is Map<String, dynamic> &&
+          (p['_id'] ?? '').toString() != currentUserId) {
         otherParticipantId = (p['_id'] ?? '').toString();
         displayName = (p['name'] ?? displayName).toString();
       }

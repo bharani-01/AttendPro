@@ -4,6 +4,15 @@ const { User, RevokedToken } = require('../models');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'attendance_app_secret_key_2024';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || `${JWT_SECRET}_refresh`;
+
+const weakJwtSecrets = new Set([
+  'attendance_app_secret_key_2024',
+  'your_super_secret_jwt_key_here_change_in_production'
+]);
+
+if (process.env.NODE_ENV === 'production' && weakJwtSecrets.has(JWT_SECRET)) {
+  throw new Error('Weak JWT_SECRET configured for production. Set a strong secret in environment variables.');
+}
 const ACCESS_TOKEN_EXPIRES_IN = process.env.ACCESS_TOKEN_EXPIRES_IN || '15m';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
 

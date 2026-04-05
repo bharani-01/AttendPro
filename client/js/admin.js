@@ -3,10 +3,70 @@ let classes = [];
 let subjects = [];
 let users = [];
 let userChart = null;
-let attendanceChart = null;
+let securityTrendChart = null;
 let subjectChart = null;
 let timetableEntries = [];
 let timetableFaculty = [];
+let managedDepartments = [];
+let securityTrendChartLoadTimer = null;
+let adminSettingsHandlersBound = false;
+const DEFAULT_EMAIL_TRIGGER_SETTINGS = {
+    leaveApproved: true,
+    leaveRejected: true,
+    attendanceAbsent: true,
+    lowAttendanceAuto: true,
+    passwordReset: true,
+    adminPasswordReset: true,
+    customTemplated: true
+};
+const DEFAULT_EMAIL_CUSTOMIZATION = {
+    timezone: 'Asia/Kolkata',
+    quietHours: {
+        enabled: false,
+        start: '22:00',
+        end: '07:00'
+    },
+    retryPolicy: {
+        enabled: false,
+        maxRetries: 2
+    }
+};
+const DEFAULT_ATTENDANCE_RULES = {
+    globalLowAttendanceThreshold: 75
+};
+const DEFAULT_COMMUNICATION_RULES = {
+    approvalWorkflowEnabled: false,
+    defaultVisibilityDays: 7,
+    autoDeleteAfterDays: 90,
+    applyToAnnouncements: true,
+    applyToDirectMessages: true
+};
+let emailTemplateState = {
+    templates: [],
+    overrides: {},
+    selectedTemplateKey: ''
+};
+const ADMIN_LIST_PAGE_SIZE = 100;
+const usersListState = { page: 1, hasMore: false, loading: false, items: [] };
+const studentsListState = { page: 1, hasMore: false, loading: false, items: [] };
+const facultyListState = { page: 1, hasMore: false, loading: false, items: [] };
+const classesListState = { page: 1, hasMore: false, loading: false, items: [] };
+const classStudentsModalState = {
+    classId: null,
+    assigned: { page: 1, hasMore: false, items: [], loading: false, search: '' },
+    available: { page: 1, hasMore: false, items: [], loading: false, search: '' }
+};
+const classSubjectsModalState = {
+    classId: null,
+    assigned: { page: 1, hasMore: false, items: [], loading: false, search: '' },
+    available: { page: 1, hasMore: false, items: [], loading: false, search: '' }
+};
+const facultySubjectsModalState = {
+    userId: null,
+    assignedAll: [],
+    assigned: { page: 1, hasMore: false, items: [], loading: false, search: '' },
+    available: { page: 1, hasMore: false, items: [], loading: false, search: '' }
+};
 const TIMETABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MAX_PERIODS_PER_DAY = 7;
 const TIMETABLE_COLUMNS = [
@@ -22,6 +82,878 @@ const TIMETABLE_COLUMNS = [
     { type: 'period', period: 7, title: 'VII', time: '02:55 PM - 03:45 PM' }
 ];
 
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function normalizeMultiPhoneInput(value) {
+    return String(value || '')
+        .split(/[\n,;]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function getParentPhonesText(user) {
+    if (Array.isArray(user?.parentPhones) && user.parentPhones.length) {
+        return user.parentPhones.join(', ');
+    }
+    return user?.parentPhone || '';
+}
+
+function toDateInputValue(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
+}
+
+function syncManagedDepartmentsFromItems(items) {
+    if (!Array.isArray(items) || !items.length) return;
+
+    const fromItems = items
+        .map((item) => (item?.department || '').toString().trim())
+        .filter(Boolean);
+
+    if (!fromItems.length) return;
+
+    const merged = new Set(managedDepartments);
+    fromItems.forEach((d) => merged.add(d));
+    managedDepartments = Array.from(merged).sort((a, b) => a.localeCompare(b));
+
+    refreshDepartmentFilters();
+}
+
+function refreshDepartmentFilters() {
+    const apply = (selectId, placeholder = 'All Departments') => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+
+        const currentValue = (select.value || '').trim();
+        select.innerHTML = [
+            `<option value="">${placeholder}</option>`,
+            ...managedDepartments.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`)
+        ].join('');
+
+        if (currentValue && managedDepartments.includes(currentValue)) {
+            select.value = currentValue;
+        }
+    };
+
+    apply('studentDeptFilter', 'All Departments');
+    apply('facultyDeptFilter', 'All Departments');
+    apply('classesDeptFilter', 'All Departments');
+}
+
+async function loadManagedDepartments() {
+    try {
+        const response = await api.get('/settings/departments');
+        const list = Array.isArray(response?.departments) ? response.departments : [];
+
+        managedDepartments = Array.from(
+            new Set(
+                list
+                    .map((d) => String(d || '').trim())
+                    .filter(Boolean)
+            )
+        ).sort((a, b) => a.localeCompare(b));
+
+        refreshDepartmentFilters();
+    } catch (error) {
+        console.error('Failed to load managed departments:', error);
+    }
+}
+
+async function loadDepartmentsPage() {
+    await loadManagedDepartments();
+    renderDepartmentsTable();
+}
+
+function parseNumberWithinRange(value, fallback, min, max) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(Math.max(parsed, min), max);
+}
+
+function readEmailCustomizationFromForm() {
+    const timezoneInput = document.getElementById('emailTimezoneInput');
+    const quietEnabledInput = document.getElementById('quietHoursEnabledInput');
+    const quietStartInput = document.getElementById('quietHoursStartInput');
+    const quietEndInput = document.getElementById('quietHoursEndInput');
+    const retryEnabledInput = document.getElementById('retryEnabledInput');
+    const retryMaxRetriesInput = document.getElementById('retryMaxRetriesInput');
+
+    return {
+        timezone: String(timezoneInput?.value || DEFAULT_EMAIL_CUSTOMIZATION.timezone).trim() || DEFAULT_EMAIL_CUSTOMIZATION.timezone,
+        quietHours: {
+            enabled: !!quietEnabledInput?.checked,
+            start: String(quietStartInput?.value || DEFAULT_EMAIL_CUSTOMIZATION.quietHours.start),
+            end: String(quietEndInput?.value || DEFAULT_EMAIL_CUSTOMIZATION.quietHours.end)
+        },
+        retryPolicy: {
+            enabled: !!retryEnabledInput?.checked,
+            maxRetries: Math.round(parseNumberWithinRange(retryMaxRetriesInput?.value, DEFAULT_EMAIL_CUSTOMIZATION.retryPolicy.maxRetries, 0, 10))
+        }
+    };
+}
+
+function applyEmailCustomizationToForm(emailCustomization) {
+    const normalized = {
+        ...DEFAULT_EMAIL_CUSTOMIZATION,
+        ...(emailCustomization || {}),
+        quietHours: {
+            ...DEFAULT_EMAIL_CUSTOMIZATION.quietHours,
+            ...(emailCustomization?.quietHours || {})
+        },
+        retryPolicy: {
+            ...DEFAULT_EMAIL_CUSTOMIZATION.retryPolicy,
+            ...(emailCustomization?.retryPolicy || {})
+        }
+    };
+
+    const timezoneInput = document.getElementById('emailTimezoneInput');
+    const quietEnabledInput = document.getElementById('quietHoursEnabledInput');
+    const quietStartInput = document.getElementById('quietHoursStartInput');
+    const quietEndInput = document.getElementById('quietHoursEndInput');
+    const retryEnabledInput = document.getElementById('retryEnabledInput');
+    const retryMaxRetriesInput = document.getElementById('retryMaxRetriesInput');
+
+    if (timezoneInput) timezoneInput.value = normalized.timezone;
+    if (quietEnabledInput) quietEnabledInput.checked = !!normalized.quietHours.enabled;
+    if (quietStartInput) quietStartInput.value = normalized.quietHours.start;
+    if (quietEndInput) quietEndInput.value = normalized.quietHours.end;
+    if (retryEnabledInput) retryEnabledInput.checked = !!normalized.retryPolicy.enabled;
+    if (retryMaxRetriesInput) retryMaxRetriesInput.value = String(normalized.retryPolicy.maxRetries);
+
+    updateTimezonePreviewText();
+}
+
+function readAttendanceRulesFromForm() {
+    const thresholdInput = document.getElementById('globalLowAttendanceThresholdInput');
+    return {
+        globalLowAttendanceThreshold: parseNumberWithinRange(
+            thresholdInput?.value,
+            DEFAULT_ATTENDANCE_RULES.globalLowAttendanceThreshold,
+            0,
+            100
+        )
+    };
+}
+
+function applyAttendanceRulesToForm(attendanceRules) {
+    const normalized = {
+        ...DEFAULT_ATTENDANCE_RULES,
+        ...(attendanceRules || {})
+    };
+
+    const thresholdInput = document.getElementById('globalLowAttendanceThresholdInput');
+    if (thresholdInput) {
+        thresholdInput.value = String(normalized.globalLowAttendanceThreshold);
+    }
+}
+
+function readCommunicationRulesFromForm() {
+    const approvalWorkflowEnabledInput = document.getElementById('approvalWorkflowEnabledInput');
+    const defaultVisibilityDaysInput = document.getElementById('defaultVisibilityDaysInput');
+    const autoDeleteAfterDaysInput = document.getElementById('autoDeleteAfterDaysInput');
+    const applyToAnnouncementsInput = document.getElementById('applyToAnnouncementsInput');
+    const applyToDirectMessagesInput = document.getElementById('applyToDirectMessagesInput');
+
+    return {
+        approvalWorkflowEnabled: !!approvalWorkflowEnabledInput?.checked,
+        defaultVisibilityDays: Math.round(parseNumberWithinRange(defaultVisibilityDaysInput?.value, DEFAULT_COMMUNICATION_RULES.defaultVisibilityDays, 1, 365)),
+        autoDeleteAfterDays: Math.round(parseNumberWithinRange(autoDeleteAfterDaysInput?.value, DEFAULT_COMMUNICATION_RULES.autoDeleteAfterDays, 1, 3650)),
+        applyToAnnouncements: !!applyToAnnouncementsInput?.checked,
+        applyToDirectMessages: !!applyToDirectMessagesInput?.checked
+    };
+}
+
+function applyCommunicationRulesToForm(communicationRules) {
+    const normalized = {
+        ...DEFAULT_COMMUNICATION_RULES,
+        ...(communicationRules || {})
+    };
+
+    const approvalWorkflowEnabledInput = document.getElementById('approvalWorkflowEnabledInput');
+    const defaultVisibilityDaysInput = document.getElementById('defaultVisibilityDaysInput');
+    const autoDeleteAfterDaysInput = document.getElementById('autoDeleteAfterDaysInput');
+    const applyToAnnouncementsInput = document.getElementById('applyToAnnouncementsInput');
+    const applyToDirectMessagesInput = document.getElementById('applyToDirectMessagesInput');
+
+    if (approvalWorkflowEnabledInput) approvalWorkflowEnabledInput.checked = !!normalized.approvalWorkflowEnabled;
+    if (defaultVisibilityDaysInput) defaultVisibilityDaysInput.value = String(normalized.defaultVisibilityDays);
+    if (autoDeleteAfterDaysInput) autoDeleteAfterDaysInput.value = String(normalized.autoDeleteAfterDays);
+    if (applyToAnnouncementsInput) applyToAnnouncementsInput.checked = !!normalized.applyToAnnouncements;
+    if (applyToDirectMessagesInput) applyToDirectMessagesInput.checked = !!normalized.applyToDirectMessages;
+}
+
+function updateTimezonePreviewText() {
+    const timezoneInput = document.getElementById('emailTimezoneInput');
+    const preview = document.getElementById('emailTimezonePreviewText');
+    if (!preview) return;
+
+    const timezone = String(timezoneInput?.value || DEFAULT_EMAIL_CUSTOMIZATION.timezone).trim() || DEFAULT_EMAIL_CUSTOMIZATION.timezone;
+
+    try {
+        const nowText = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            dateStyle: 'medium',
+            timeStyle: 'short'
+        }).format(new Date());
+        preview.textContent = `Current time in ${timezone}: ${nowText}`;
+    } catch (_error) {
+        preview.textContent = 'Invalid timezone. Example: Asia/Kolkata';
+    }
+}
+
+function getTemplateOverride(templateKey) {
+    const stored = emailTemplateState.overrides?.[templateKey] || {};
+    return {
+        enabled: !!stored.enabled,
+        subject: String(stored.subject || ''),
+        bodyHtml: String(stored.bodyHtml || '')
+    };
+}
+
+function renderTemplateEditorForm() {
+    const select = document.getElementById('emailTemplateSelect');
+    const enableInput = document.getElementById('emailTemplateOverrideEnabledInput');
+    const subjectInput = document.getElementById('emailTemplateSubjectInput');
+    const bodyInput = document.getElementById('emailTemplateBodyInput');
+    const varsText = document.getElementById('emailTemplateVarsText');
+
+    if (!select || !enableInput || !subjectInput || !bodyInput || !varsText) return;
+    if (!emailTemplateState.templates.length) {
+        select.innerHTML = '<option value="">No templates found</option>';
+        varsText.textContent = 'Variables: -';
+        return;
+    }
+
+    if (!emailTemplateState.selectedTemplateKey) {
+        emailTemplateState.selectedTemplateKey = emailTemplateState.templates[0].templateKey;
+    }
+
+    select.innerHTML = emailTemplateState.templates
+        .map((item) => `<option value="${escapeHtml(item.templateKey)}">${escapeHtml(item.templateKey)}</option>`)
+        .join('');
+    select.value = emailTemplateState.selectedTemplateKey;
+
+    const selectedTemplate = emailTemplateState.templates.find((t) => t.templateKey === emailTemplateState.selectedTemplateKey);
+    const override = getTemplateOverride(emailTemplateState.selectedTemplateKey);
+
+    enableInput.checked = override.enabled;
+    subjectInput.value = override.subject || selectedTemplate?.defaultSubject || '';
+    bodyInput.value = override.bodyHtml || '';
+    varsText.textContent = `Variables: ${(selectedTemplate?.variableKeys || []).join(', ') || '-'}`;
+}
+
+function bindTemplateEditorChangeHandlers() {
+    const select = document.getElementById('emailTemplateSelect');
+    const enableInput = document.getElementById('emailTemplateOverrideEnabledInput');
+    const subjectInput = document.getElementById('emailTemplateSubjectInput');
+    const bodyInput = document.getElementById('emailTemplateBodyInput');
+    const testBtn = document.getElementById('sendTemplateTestEmailBtn');
+
+    if (select) {
+        select.addEventListener('change', () => {
+            emailTemplateState.selectedTemplateKey = String(select.value || '');
+            renderTemplateEditorForm();
+        });
+    }
+
+    const persistSelectedOverride = () => {
+        const key = emailTemplateState.selectedTemplateKey;
+        if (!key) return;
+
+        emailTemplateState.overrides[key] = {
+            enabled: !!enableInput?.checked,
+            subject: String(subjectInput?.value || ''),
+            bodyHtml: String(bodyInput?.value || '')
+        };
+    };
+
+    if (enableInput) enableInput.addEventListener('change', persistSelectedOverride);
+    if (subjectInput) subjectInput.addEventListener('input', persistSelectedOverride);
+    if (bodyInput) bodyInput.addEventListener('input', persistSelectedOverride);
+
+    if (testBtn) {
+        testBtn.addEventListener('click', async () => {
+            const recipientInput = document.getElementById('emailTemplateTestRecipientInput');
+            const recipient = String(recipientInput?.value || '').trim();
+            const templateKey = emailTemplateState.selectedTemplateKey;
+
+            if (!recipient) {
+                alert('Enter a recipient email for test send');
+                return;
+            }
+            if (!templateKey) {
+                alert('Select a template first');
+                return;
+            }
+
+            persistSelectedOverride();
+            const override = getTemplateOverride(templateKey);
+
+            try {
+                await api.post('/settings/email-templates/test', {
+                    to: recipient,
+                    templateKey,
+                    subject: override.subject,
+                    bodyHtml: override.bodyHtml,
+                    variables: {}
+                });
+                alert('Test email sent successfully');
+            } catch (error) {
+                alert(error.message || 'Failed to send test email');
+            }
+        });
+    }
+}
+
+async function loadEmailTemplateEditor() {
+    try {
+        const response = await api.get('/settings/email-templates');
+        const templates = Array.isArray(response?.templates) ? response.templates : [];
+
+        emailTemplateState.templates = templates;
+        emailTemplateState.overrides = templates.reduce((acc, item) => {
+            acc[item.templateKey] = {
+                enabled: !!item?.override?.enabled,
+                subject: String(item?.override?.subject || ''),
+                bodyHtml: String(item?.override?.bodyHtml || '')
+            };
+            return acc;
+        }, {});
+
+        emailTemplateState.selectedTemplateKey = templates[0]?.templateKey || '';
+        renderTemplateEditorForm();
+    } catch (error) {
+        console.error('Failed to load email templates:', error);
+    }
+}
+
+function setupSettingsPaneNavigation() {
+    const navItems = Array.from(document.querySelectorAll('[data-settings-target]'));
+    const panes = Array.from(document.querySelectorAll('[data-settings-pane]'));
+    const searchInput = document.getElementById('settingsSidebarSearchInput');
+    const suggestionsWrap = document.getElementById('settingsSidebarSuggestions');
+    if (!navItems.length || !panes.length) return;
+
+    const paneByTarget = panes.reduce((acc, pane) => {
+        const key = String(pane.dataset.settingsPane || '');
+        if (key) acc[key] = pane;
+        return acc;
+    }, {});
+
+    const activatePane = (target) => {
+        navItems.forEach((item) => {
+            item.classList.toggle('active', item.dataset.settingsTarget === target);
+        });
+        panes.forEach((pane) => {
+            pane.classList.toggle('active', pane.dataset.settingsPane === target);
+        });
+    };
+
+    const paneContainsSearchTerm = (target, term) => {
+        const pane = paneByTarget[target];
+        if (!pane || !term) return false;
+        return String(pane.textContent || '').toLowerCase().includes(term);
+    };
+
+    const getDisplayNameForTarget = (target) => {
+        const navItem = navItems.find((item) => String(item.dataset.settingsTarget || '') === target);
+        return String(navItem?.querySelector('.settings-nav-label')?.textContent || target || '').trim();
+    };
+
+    const findFirstMatchingElementInPane = (pane, term) => {
+        if (!pane || !term) return null;
+
+        const candidates = Array.from(pane.querySelectorAll('label, h5, .settings-subheading, input, select, textarea, small'));
+        return candidates.find((element) => {
+            const textContent = String(element.textContent || '').toLowerCase();
+            const placeholder = String(element.getAttribute('placeholder') || '').toLowerCase();
+            const id = String(element.id || '').toLowerCase();
+            const name = String(element.getAttribute('name') || '').toLowerCase();
+            return textContent.includes(term)
+                || placeholder.includes(term)
+                || id.includes(term)
+                || name.includes(term);
+        }) || null;
+    };
+
+    const getFocusableTarget = (element) => {
+        if (!element) return null;
+        const tagName = String(element.tagName || '').toUpperCase();
+        if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA' || tagName === 'BUTTON') {
+            return element;
+        }
+
+        if (tagName === 'LABEL') {
+            const htmlFor = String(element.getAttribute('for') || '').trim();
+            if (htmlFor) {
+                return document.getElementById(htmlFor);
+            }
+        }
+
+        return element;
+    };
+
+    const flashSearchHit = (element) => {
+        if (!element) return;
+        element.classList.remove('settings-search-hit');
+        // Force reflow so repeated search matches still animate.
+        void element.offsetWidth;
+        element.classList.add('settings-search-hit');
+        setTimeout(() => element.classList.remove('settings-search-hit'), 1300);
+    };
+
+    const applySidebarSearchFilter = (rawTerm) => {
+        const term = String(rawTerm || '').trim().toLowerCase();
+        let visibleCount = 0;
+        let firstVisibleTarget = '';
+
+        navItems.forEach((item) => {
+            const target = String(item.dataset.settingsTarget || '');
+            const navText = String(item.querySelector('.settings-nav-label')?.textContent || item.textContent || '').toLowerCase();
+            const isMatch = !term || navText.includes(term) || paneContainsSearchTerm(target, term);
+            item.classList.toggle('is-hidden', !isMatch);
+
+            if (isMatch) {
+                visibleCount += 1;
+                if (!firstVisibleTarget) firstVisibleTarget = target;
+            }
+        });
+
+        if (!visibleCount) return;
+
+        const hasVisibleActive = navItems.some((item) => item.classList.contains('active') && !item.classList.contains('is-hidden'));
+        if (!hasVisibleActive && firstVisibleTarget) {
+            activatePane(firstVisibleTarget);
+        }
+    };
+
+    const buildSuggestionEntries = () => {
+        const entries = [];
+
+        navItems.forEach((item) => {
+            const target = String(item.dataset.settingsTarget || '');
+            const label = String(item.querySelector('.settings-nav-label')?.textContent || '').trim();
+            if (!target || !label) return;
+
+            entries.push({
+                type: 'category',
+                target,
+                label,
+                searchText: label.toLowerCase(),
+                element: paneByTarget[target]
+            });
+
+            const pane = paneByTarget[target];
+            if (!pane) return;
+            const seen = new Set();
+            const fieldNodes = pane.querySelectorAll('label, h5, .settings-subheading, input, select, textarea');
+
+            fieldNodes.forEach((node) => {
+                let text = String(node.textContent || '').trim();
+                if (!text && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA')) {
+                    text = String(node.getAttribute('placeholder') || '').trim();
+                }
+                if (!text) return;
+
+                const key = `${target}::${text.toLowerCase()}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+
+                entries.push({
+                    type: 'field',
+                    target,
+                    label: `${label}: ${text}`,
+                    searchText: `${label} ${text}`.toLowerCase(),
+                    element: node
+                });
+            });
+        });
+
+        return entries;
+    };
+
+    const suggestionEntries = buildSuggestionEntries();
+
+    const jumpToSuggestion = (entry) => {
+        if (!entry) return;
+        activatePane(entry.target);
+
+        const targetElement = entry.element || paneByTarget[entry.target];
+        const focusable = getFocusableTarget(targetElement);
+        requestAnimationFrame(() => {
+            const scrollTarget = focusable || targetElement;
+            scrollTarget?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (focusable && typeof focusable.focus === 'function') {
+                focusable.focus({ preventScroll: true });
+            }
+            const highlightTarget = targetElement?.closest('.form-group') || targetElement?.closest('.settings-inline-fields') || targetElement;
+            flashSearchHit(highlightTarget);
+        });
+    };
+
+    const renderSuggestions = (rawTerm) => {
+        if (!suggestionsWrap) return;
+        const term = String(rawTerm || '').trim().toLowerCase();
+
+        const filtered = (term
+            ? suggestionEntries.filter((entry) => entry.searchText.includes(term))
+            : suggestionEntries.filter((entry) => entry.type === 'category')
+        ).slice(0, 6);
+
+        suggestionsWrap.innerHTML = '';
+        if (!filtered.length) return;
+
+        filtered.forEach((entry) => {
+            const suggestion = document.createElement('button');
+            suggestion.type = 'button';
+            suggestion.className = 'settings-search-suggestion';
+            suggestion.textContent = entry.label;
+            suggestion.title = entry.type === 'category'
+                ? `Open ${getDisplayNameForTarget(entry.target)}`
+                : `Jump to ${entry.label}`;
+            suggestion.addEventListener('click', () => {
+                if (searchInput) {
+                    searchInput.value = entry.type === 'category' ? getDisplayNameForTarget(entry.target) : entry.label;
+                    applySidebarSearchFilter(searchInput.value);
+                    renderSuggestions(searchInput.value);
+                }
+                jumpToSuggestion(entry);
+            });
+            suggestionsWrap.appendChild(suggestion);
+        });
+    };
+
+    const jumpToFirstSearchMatch = (rawTerm) => {
+        const term = String(rawTerm || '').trim().toLowerCase();
+        if (!term) return;
+
+        const targetOrder = navItems
+            .filter((item) => !item.classList.contains('is-hidden'))
+            .map((item) => String(item.dataset.settingsTarget || ''));
+
+        for (const target of targetOrder) {
+            const pane = paneByTarget[target];
+            const match = findFirstMatchingElementInPane(pane, term);
+            if (!match) continue;
+
+            activatePane(target);
+            const focusable = getFocusableTarget(match);
+            requestAnimationFrame(() => {
+                const scrollTarget = focusable || match;
+                scrollTarget?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (focusable && typeof focusable.focus === 'function') {
+                    focusable.focus({ preventScroll: true });
+                }
+
+                const highlightTarget = match.closest('.form-group') || match.closest('.settings-inline-fields') || match;
+                flashSearchHit(highlightTarget);
+            });
+            return;
+        }
+
+        if (targetOrder[0]) {
+            activatePane(targetOrder[0]);
+        }
+    };
+
+    navItems.forEach((item) => {
+        item.addEventListener('click', () => {
+            activatePane(String(item.dataset.settingsTarget || ''));
+        });
+    });
+
+    const initiallyActive = navItems.find((item) => item.classList.contains('active'))?.dataset.settingsTarget
+        || navItems[0].dataset.settingsTarget;
+
+    activatePane(String(initiallyActive || ''));
+    applySidebarSearchFilter('');
+    renderSuggestions('');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            applySidebarSearchFilter(searchInput.value);
+            renderSuggestions(searchInput.value);
+        });
+
+        searchInput.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            jumpToFirstSearchMatch(searchInput.value);
+        });
+    }
+}
+
+function setupAdminSettingsHandlers() {
+    if (adminSettingsHandlersBound) return;
+
+    const form = document.getElementById('adminSettingsForm');
+    const resetBtn = document.getElementById('resetDefaultPasswordBtn');
+    const timezoneInput = document.getElementById('emailTimezoneInput');
+
+    if (form) {
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const input = document.getElementById('defaultUserPasswordInput');
+            const value = (input?.value || '').trim();
+            const emailTriggers = readEmailTriggerSettingsFromForm();
+            const emailCustomization = readEmailCustomizationFromForm();
+            const attendanceRules = readAttendanceRulesFromForm();
+            const communicationRules = readCommunicationRulesFromForm();
+
+            const selectedKey = emailTemplateState.selectedTemplateKey;
+            if (selectedKey) {
+                const enableInput = document.getElementById('emailTemplateOverrideEnabledInput');
+                const subjectInput = document.getElementById('emailTemplateSubjectInput');
+                const bodyInput = document.getElementById('emailTemplateBodyInput');
+                emailTemplateState.overrides[selectedKey] = {
+                    enabled: !!enableInput?.checked,
+                    subject: String(subjectInput?.value || ''),
+                    bodyHtml: String(bodyInput?.value || '')
+                };
+            }
+
+            if (!value) {
+                alert('Default user password is required');
+                return;
+            }
+
+            try {
+                await api.post('/settings/admin-config', {
+                    defaultUserPassword: value,
+                    emailTriggers,
+                    emailCustomization,
+                    attendanceRules,
+                    communicationRules
+                });
+
+                await api.post('/settings/email-templates', {
+                    overrides: emailTemplateState.overrides
+                });
+
+                await loadEmailStats();
+                alert('Settings saved successfully');
+            } catch (error) {
+                alert(error.message || 'Failed to save settings');
+            }
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+            const resetValue = 'password';
+            const emailTriggers = readEmailTriggerSettingsFromForm();
+            const emailCustomization = readEmailCustomizationFromForm();
+            const attendanceRules = readAttendanceRulesFromForm();
+            const communicationRules = readCommunicationRulesFromForm();
+            try {
+                await api.post('/settings/admin-config', {
+                    defaultUserPassword: resetValue,
+                    emailTriggers,
+                    emailCustomization,
+                    attendanceRules,
+                    communicationRules
+                });
+                const input = document.getElementById('defaultUserPasswordInput');
+                if (input) input.value = resetValue;
+                await loadEmailStats();
+                alert('Default password reset to password');
+            } catch (error) {
+                alert(error.message || 'Failed to reset default password');
+            }
+        });
+    }
+
+    if (timezoneInput) {
+        timezoneInput.addEventListener('input', () => {
+            updateTimezonePreviewText();
+        });
+    }
+
+    setupSettingsPaneNavigation();
+    bindTemplateEditorChangeHandlers();
+
+    adminSettingsHandlersBound = true;
+}
+
+async function loadAdminSettingsPage() {
+    setupAdminSettingsHandlers();
+
+    const input = document.getElementById('defaultUserPasswordInput');
+    if (!input) return;
+
+    try {
+        const data = await api.get('/settings/admin-config');
+        input.value = (data?.defaultUserPassword || 'password').trim() || 'password';
+        applyEmailTriggerSettingsToForm(data?.emailTriggers);
+        applyEmailCustomizationToForm(data?.emailCustomization);
+        applyAttendanceRulesToForm(data?.attendanceRules);
+        applyCommunicationRulesToForm(data?.communicationRules);
+    } catch (error) {
+        console.error('Failed to load admin settings:', error);
+        input.value = 'password';
+        applyEmailTriggerSettingsToForm(null);
+        applyEmailCustomizationToForm(null);
+        applyAttendanceRulesToForm(null);
+        applyCommunicationRulesToForm(null);
+    }
+
+    await loadEmailTemplateEditor();
+    await loadEmailStats();
+}
+
+function readEmailTriggerSettingsFromForm() {
+    const map = {
+        leaveApproved: 'triggerLeaveApprovedInput',
+        leaveRejected: 'triggerLeaveRejectedInput',
+        attendanceAbsent: 'triggerAttendanceAbsentInput',
+        lowAttendanceAuto: 'triggerLowAttendanceAutoInput',
+        passwordReset: 'triggerPasswordResetInput',
+        adminPasswordReset: 'triggerAdminPasswordResetInput',
+        customTemplated: 'triggerCustomTemplatedInput'
+    };
+
+    const settings = { ...DEFAULT_EMAIL_TRIGGER_SETTINGS };
+    Object.entries(map).forEach(([key, elementId]) => {
+        const input = document.getElementById(elementId);
+        if (input) {
+            settings[key] = !!input.checked;
+        }
+    });
+
+    return settings;
+}
+
+function applyEmailTriggerSettingsToForm(emailTriggers) {
+    const normalized = {
+        ...DEFAULT_EMAIL_TRIGGER_SETTINGS,
+        ...(emailTriggers || {})
+    };
+
+    const map = {
+        leaveApproved: 'triggerLeaveApprovedInput',
+        leaveRejected: 'triggerLeaveRejectedInput',
+        attendanceAbsent: 'triggerAttendanceAbsentInput',
+        lowAttendanceAuto: 'triggerLowAttendanceAutoInput',
+        passwordReset: 'triggerPasswordResetInput',
+        adminPasswordReset: 'triggerAdminPasswordResetInput',
+        customTemplated: 'triggerCustomTemplatedInput'
+    };
+
+    Object.entries(map).forEach(([key, elementId]) => {
+        const input = document.getElementById(elementId);
+        if (input) {
+            input.checked = !!normalized[key];
+        }
+    });
+}
+
+async function loadEmailStats() {
+    const dailyEl = document.getElementById('emailStatsDailyCount');
+    const sevenDayEl = document.getElementById('emailStatsSevenDayCount');
+    const lifetimeEl = document.getElementById('emailStatsLifetimeCount');
+    const successRateEl = document.getElementById('emailStatsSuccessRate');
+    const failureRateEl = document.getElementById('emailStatsFailureRate');
+    const asOfEl = document.getElementById('emailStatsAsOfText');
+
+    if (!dailyEl || !sevenDayEl || !lifetimeEl || !asOfEl) return;
+
+    try {
+        const stats = await api.get('/settings/email-stats');
+        dailyEl.textContent = String(stats?.dailyAttempts || 0);
+        sevenDayEl.textContent = String(stats?.sevenDayAttempts || 0);
+        lifetimeEl.textContent = String(stats?.lifetimeAttempts || 0);
+        if (successRateEl) successRateEl.textContent = `${Number(stats?.successRate || 0).toFixed(2)}%`;
+        if (failureRateEl) failureRateEl.textContent = `${Number(stats?.failureRate || 0).toFixed(2)}%`;
+
+        const asOfDate = stats?.asOf ? new Date(stats.asOf) : new Date();
+        const asOfText = Number.isNaN(asOfDate.getTime())
+            ? 'Email attempts count (success + failed).'
+            : `Email attempts count (success + failed). Updated ${asOfDate.toLocaleString()}.`;
+
+        asOfEl.textContent = asOfText;
+    } catch (error) {
+        console.error('Failed to load email stats:', error);
+        dailyEl.textContent = '0';
+        sevenDayEl.textContent = '0';
+        lifetimeEl.textContent = '0';
+        if (successRateEl) successRateEl.textContent = '0%';
+        if (failureRateEl) failureRateEl.textContent = '0%';
+        asOfEl.textContent = 'Unable to load email stats.';
+    }
+}
+
+function renderDepartmentsTable() {
+    const tbody = document.getElementById('departmentsTableBody');
+    if (!tbody) return;
+
+    if (!managedDepartments.length) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center">No departments added yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = managedDepartments
+        .map((department) => `
+            <tr>
+                <td>${escapeHtml(department)}</td>
+                <td class="actions">
+                    <button class="btn btn-small btn-danger" onclick="deleteDepartment('${encodeURIComponent(department)}')">Delete</button>
+                </td>
+            </tr>
+        `)
+        .join('');
+}
+
+async function addDepartment() {
+    const input = document.getElementById('departmentNameInput');
+    const name = (input?.value || '').trim();
+
+    if (!name) {
+        alert('Department name is required');
+        return;
+    }
+
+    try {
+        const response = await api.post('/settings/departments', { name });
+        managedDepartments = Array.isArray(response?.departments)
+            ? response.departments
+            : managedDepartments;
+
+        if (input) input.value = '';
+        refreshDepartmentFilters();
+        renderDepartmentsTable();
+    } catch (error) {
+        alert(error.message || 'Failed to add department');
+    }
+}
+
+async function deleteDepartment(encodedName) {
+    const name = decodeURIComponent(encodedName || '');
+    if (!name) return;
+
+    if (!confirm(`Delete department "${name}"?`)) return;
+
+    try {
+        const response = await api.delete(`/settings/departments/${encodeURIComponent(name)}`);
+        managedDepartments = Array.isArray(response?.departments)
+            ? response.departments
+            : managedDepartments;
+
+        refreshDepartmentFilters();
+        renderDepartmentsTable();
+    } catch (error) {
+        alert(error.message || 'Failed to delete department');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     currentUser = checkAuth();
     if (!currentUser || currentUser.role !== 'admin') {
@@ -34,6 +966,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupNavigation();
     setupLogoutHandler();
     setupUserMenu();
+    await loadManagedDepartments();
     await applyDashboardSettings();
     await loadOverviewData();
     await loadAnnouncements();
@@ -134,6 +1067,78 @@ function setupNavigation() {
     });
 }
 
+function getRecentDateLabels(days = 7) {
+    const labels = [];
+    for (let offset = days - 1; offset >= 0; offset -= 1) {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - offset);
+        labels.push(date.toISOString().split('T')[0]);
+    }
+    return labels;
+}
+
+function scheduleSecurityTrendChartLoad() {
+    if (securityTrendChartLoadTimer) {
+        clearTimeout(securityTrendChartLoadTimer);
+    }
+
+    // Keep overview cards responsive by loading chart after initial paint.
+    securityTrendChartLoadTimer = setTimeout(() => {
+        renderSecurityTrendChart();
+    }, 0);
+}
+
+function setLoadMoreVisibility(buttonId, hasMore, isLoading = false) {
+    const btn = document.getElementById(buttonId);
+    if (!btn) return;
+    btn.style.display = hasMore ? 'inline-flex' : 'none';
+    btn.disabled = isLoading;
+    btn.textContent = isLoading ? 'Loading...' : 'Load More';
+}
+
+function appendRows(tableSelector, rowsHtml, reset = false) {
+    const tbody = document.querySelector(tableSelector);
+    if (!tbody) return;
+
+    if (reset) {
+        tbody.innerHTML = rowsHtml;
+    } else {
+        tbody.insertAdjacentHTML('beforeend', rowsHtml);
+    }
+}
+
+async function fetchAllSubjects(search = '') {
+    const all = [];
+    let page = 1;
+    const limit = 200;
+    let hasMore = true;
+
+    while (hasMore) {
+        const params = new URLSearchParams({
+            page: String(page),
+            limit: String(limit)
+        });
+        if (search && search.trim()) {
+            params.append('search', search.trim());
+        }
+
+        const data = await api.get(`/subjects?${params.toString()}`);
+        const incoming = Array.isArray(data?.subjects) ? data.subjects : [];
+        all.push(...incoming);
+
+        hasMore = !!data?.pagination?.hasMore;
+        page += 1;
+
+        // Backward compatibility: older server may return all subjects without pagination.
+        if (!data?.pagination) {
+            hasMore = false;
+        }
+    }
+
+    return all;
+}
+
 async function loadPageData(page) {
     switch (page) {
         case 'overview':
@@ -153,6 +1158,12 @@ async function loadPageData(page) {
             break;
         case 'classes':
             await loadClasses();
+            break;
+        case 'departments':
+            await loadDepartmentsPage();
+            break;
+        case 'settings':
+            await loadAdminSettingsPage();
             break;
         case 'timetable':
             await loadTimetableData();
@@ -291,7 +1302,7 @@ async function findUserIdByEmail(email) {
         throw new Error('Please enter a user email');
     }
 
-    const data = await api.get('/auth/users');
+    const data = await api.get(`/auth/users?search=${encodeURIComponent(trimmed)}&page=1&limit=20`);
     const user = (data.users || []).find((u) => (u.email || '').toLowerCase() === trimmed);
     if (!user) {
         throw new Error('User not found for this email');
@@ -326,22 +1337,37 @@ async function unblockUserByEmail() {
 
 async function loadOverviewData() {
     try {
-        const [usersData, subjectsData, classesData] = await Promise.all([
-            api.get('/auth/users'),
-            api.get('/subjects'),
-            api.get('/classes')
-        ]);
+        let stats;
 
-        const students = usersData.users.filter(u => u.role === 'student');
-        const faculty = usersData.users.filter(u => u.role === 'faculty');
+        try {
+            const statsData = await api.get('/auth/users/stats');
+            stats = statsData.stats;
+        } catch (statsError) {
+            // Fallback for older server versions: keep existing behavior.
+            const [usersData, subjectsData, classesData] = await Promise.all([
+                api.get('/auth/users'),
+                api.get('/subjects'),
+                api.get('/classes')
+            ]);
 
-        document.getElementById('totalStudents').textContent = students.length;
-        document.getElementById('totalFaculty').textContent = faculty.length;
-        document.getElementById('totalSubjects').textContent = subjectsData.subjects.length;
-        document.getElementById('totalClasses').textContent = classesData.classes.length;
+            const students = usersData.users.filter(u => u.role === 'student');
+            const faculty = usersData.users.filter(u => u.role === 'faculty');
 
-        renderUserDistributionChart(students.length, faculty.length);
-        await renderAttendanceOverviewChart();
+            stats = {
+                totalStudents: students.length,
+                totalFaculty: faculty.length,
+                totalSubjects: subjectsData.subjects.length,
+                totalClasses: classesData.classes.length,
+            };
+        }
+
+        document.getElementById('totalStudents').textContent = stats.totalStudents;
+        document.getElementById('totalFaculty').textContent = stats.totalFaculty;
+        document.getElementById('totalSubjects').textContent = stats.totalSubjects;
+        document.getElementById('totalClasses').textContent = stats.totalClasses;
+
+        renderUserDistributionChart(stats.totalStudents, stats.totalFaculty);
+        scheduleSecurityTrendChartLoad();
     } catch (error) {
         console.error('Error loading overview:', error);
     }
@@ -383,43 +1409,48 @@ function renderUserDistributionChart(students, faculty) {
     });
 }
 
-async function renderAttendanceOverviewChart() {
-    const ctx = document.getElementById('attendanceChart');
+async function renderSecurityTrendChart() {
+    const ctx = document.getElementById('securityTrendChart');
     if (!ctx) return;
 
     try {
-        const reportData = await api.get('/attendance/report');
-        
-        const studentAttendance = {};
-        reportData.report.forEach(r => {
-            if (!studentAttendance[r.studentName]) {
-                studentAttendance[r.studentName] = { total: 0, present: 0 };
+        const labels = getRecentDateLabels(7);
+        const attemptsData = await api.get('/security/attempts?limit=500');
+        const attempts = Array.isArray(attemptsData?.attempts) ? attemptsData.attempts : [];
+
+        const attemptCountByDay = new Map(labels.map((label) => [label, 0]));
+
+        attempts.forEach((attempt) => {
+            const attemptedAt = attempt?.attemptedAt ? new Date(attempt.attemptedAt) : null;
+            if (!attemptedAt || Number.isNaN(attemptedAt.getTime())) {
+                return;
             }
-            studentAttendance[r.studentName].total += r.totalClasses;
-            studentAttendance[r.studentName].present += r.present;
+
+            const dayKey = attemptedAt.toISOString().split('T')[0];
+            if (attemptCountByDay.has(dayKey)) {
+                attemptCountByDay.set(dayKey, attemptCountByDay.get(dayKey) + 1);
+            }
         });
 
-        const studentNames = Object.keys(studentAttendance).slice(0, 5);
-        const attendancePercentages = studentNames.map(name => {
-            const data = studentAttendance[name];
-            return data.total > 0 ? ((data.present / data.total) * 100).toFixed(1) : 0;
-        });
+        const failedAttempts = labels.map((label) => attemptCountByDay.get(label) || 0);
 
-        if (attendanceChart) {
-            attendanceChart.destroy();
+        if (securityTrendChart) {
+            securityTrendChart.destroy();
         }
 
-        attendanceChart = new Chart(ctx, {
-            type: 'bar',
+        securityTrendChart = new Chart(ctx, {
+            type: 'line',
             data: {
-                labels: studentNames.length > 0 ? studentNames : ['No Data'],
+                labels,
                 datasets: [{
-                    label: 'Attendance %',
-                    data: attendancePercentages.length > 0 ? attendancePercentages : [0],
-                    backgroundColor: attendancePercentages.map(p => 
-                        p < 75 ? '#e74c3c' : p < 85 ? '#f39c12' : '#27ae60'
-                    ),
-                    borderRadius: 5
+                    label: 'Failed Login Attempts',
+                    data: failedAttempts,
+                    borderColor: '#e74c3c',
+                    backgroundColor: 'rgba(231, 76, 60, 0.18)',
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
                 }]
             },
             options: {
@@ -428,43 +1459,86 @@ async function renderAttendanceOverviewChart() {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        max: 100,
-                        title: {
-                            display: false
-                        },
                         ticks: {
                             font: { size: 10 }
                         }
                     },
                     x: {
-                        ticks: { font: { size: 10 } }
+                        ticks: {
+                            font: { size: 10 },
+                            callback(value, index) {
+                                const label = labels[index] || '';
+                                return label.slice(5);
+                            }
+                        }
                     }
                 },
                 plugins: {
                     legend: {
                         display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title(items) {
+                                const idx = items?.[0]?.dataIndex;
+                                return idx >= 0 ? labels[idx] : '';
+                            }
+                        }
                     }
                 }
             }
         });
     } catch (error) {
-        console.log('Attendance chart data not available yet');
+        console.log('Security trend chart data not available yet');
     }
 }
 
-async function loadUsers() {
+async function loadUsers(reset = true) {
+    if (usersListState.loading) return;
+
     try {
-        const data = await api.get('/auth/users');
-        users = data.users;
-        renderUsersTable(users);
+        const search = (document.getElementById('usersSearchInput')?.value || '').trim();
+        const role = (document.getElementById('usersRoleFilter')?.value || '').trim();
+
+        if (reset) {
+            usersListState.page = 1;
+            usersListState.items = [];
+        }
+
+        usersListState.loading = true;
+        setLoadMoreVisibility('usersLoadMoreBtn', usersListState.hasMore, true);
+
+        const params = new URLSearchParams({
+            page: String(usersListState.page),
+            limit: String(ADMIN_LIST_PAGE_SIZE),
+        });
+        if (search) params.append('search', search);
+        if (role) params.append('role', role);
+
+        const data = await api.get(`/auth/users?${params.toString()}`);
+        const incoming = data.users || [];
+
+        usersListState.items = reset
+            ? incoming
+            : usersListState.items.concat(incoming);
+        usersListState.hasMore = !!data.pagination?.hasMore;
+
+        users = usersListState.items;
+        renderUsersTable(incoming, reset);
+
+        if (usersListState.hasMore) {
+            usersListState.page += 1;
+        }
     } catch (error) {
         console.error('Error loading users:', error);
+    } finally {
+        usersListState.loading = false;
+        setLoadMoreVisibility('usersLoadMoreBtn', usersListState.hasMore, false);
     }
 }
 
-function renderUsersTable(users) {
-    const tbody = document.querySelector('#usersTable tbody');
-    tbody.innerHTML = users.map(user => `
+function renderUsersTable(usersData, reset = true) {
+    const rowsHtml = usersData.map(user => `
         <tr>
             <td>${user.name}</td>
             <td>${user.email}</td>
@@ -476,21 +1550,60 @@ function renderUsersTable(users) {
             </td>
         </tr>
     `).join('');
+
+    appendRows('#usersTable tbody', rowsHtml, reset);
 }
 
-async function loadStudents() {
+async function loadStudents(reset = true) {
+    if (studentsListState.loading) return;
+
     try {
-        const data = await api.get('/auth/users?role=student');
-        users = data.users;
-        renderStudentsTable(users);
+        const search = (document.getElementById('studentSearchInput')?.value || '').trim();
+        const department = (document.getElementById('studentDeptFilter')?.value || '').trim();
+        const year = (document.getElementById('studentYearFilter')?.value || '').trim();
+
+        if (reset) {
+            studentsListState.page = 1;
+            studentsListState.items = [];
+        }
+
+        studentsListState.loading = true;
+        setLoadMoreVisibility('studentsLoadMoreBtn', studentsListState.hasMore, true);
+
+        const params = new URLSearchParams({
+            role: 'student',
+            page: String(studentsListState.page),
+            limit: String(ADMIN_LIST_PAGE_SIZE),
+        });
+        if (search) params.append('search', search);
+        if (department) params.append('department', department);
+        if (year) params.append('year', year);
+
+        const data = await api.get(`/auth/users?${params.toString()}`);
+        const incoming = data.users || [];
+
+        studentsListState.items = reset
+            ? incoming
+            : studentsListState.items.concat(incoming);
+        studentsListState.hasMore = !!data.pagination?.hasMore;
+
+        users = studentsListState.items;
+        renderStudentsTable(incoming, reset);
+        syncManagedDepartmentsFromItems(incoming);
+
+        if (studentsListState.hasMore) {
+            studentsListState.page += 1;
+        }
     } catch (error) {
         console.error('Error loading students:', error);
+    } finally {
+        studentsListState.loading = false;
+        setLoadMoreVisibility('studentsLoadMoreBtn', studentsListState.hasMore, false);
     }
 }
 
-function renderStudentsTable(students) {
-    const tbody = document.querySelector('#studentsTable tbody');
-    tbody.innerHTML = students.map(student => `
+function renderStudentsTable(studentsData, reset = true) {
+    const rowsHtml = studentsData.map(student => `
         <tr>
             <td>${student.name}</td>
             <td>${student.uniqueId || 'N/A'}</td>
@@ -504,21 +1617,58 @@ function renderStudentsTable(students) {
             </td>
         </tr>
     `).join('');
+
+    appendRows('#studentsTable tbody', rowsHtml, reset);
 }
 
-async function loadFaculty() {
+async function loadFaculty(reset = true) {
+    if (facultyListState.loading) return;
+
     try {
-        const data = await api.get('/auth/users?role=faculty');
-        users = data.users;
-        renderFacultyTable(users);
+        const search = (document.getElementById('facultySearchInput')?.value || '').trim();
+        const department = (document.getElementById('facultyDeptFilter')?.value || '').trim();
+
+        if (reset) {
+            facultyListState.page = 1;
+            facultyListState.items = [];
+        }
+
+        facultyListState.loading = true;
+        setLoadMoreVisibility('facultyLoadMoreBtn', facultyListState.hasMore, true);
+
+        const params = new URLSearchParams({
+            role: 'faculty',
+            page: String(facultyListState.page),
+            limit: String(ADMIN_LIST_PAGE_SIZE),
+        });
+        if (search) params.append('search', search);
+        if (department) params.append('department', department);
+
+        const data = await api.get(`/auth/users?${params.toString()}`);
+        const incoming = data.users || [];
+
+        facultyListState.items = reset
+            ? incoming
+            : facultyListState.items.concat(incoming);
+        facultyListState.hasMore = !!data.pagination?.hasMore;
+
+        users = facultyListState.items;
+        renderFacultyTable(incoming, reset);
+        syncManagedDepartmentsFromItems(incoming);
+
+        if (facultyListState.hasMore) {
+            facultyListState.page += 1;
+        }
     } catch (error) {
         console.error('Error loading faculty:', error);
+    } finally {
+        facultyListState.loading = false;
+        setLoadMoreVisibility('facultyLoadMoreBtn', facultyListState.hasMore, false);
     }
 }
 
-function renderFacultyTable(faculty) {
-    const tbody = document.querySelector('#facultyTable tbody');
-    tbody.innerHTML = faculty.map(f => `
+function renderFacultyTable(facultyData, reset = true) {
+    const rowsHtml = facultyData.map(f => `
         <tr>
             <td>${f.name}</td>
             <td>${f.email}</td>
@@ -529,12 +1679,13 @@ function renderFacultyTable(faculty) {
             </td>
         </tr>
     `).join('');
+
+    appendRows('#facultyTable tbody', rowsHtml, reset);
 }
 
 async function loadSubjects() {
     try {
-        const data = await api.get('/subjects');
-        subjects = data.subjects;
+        subjects = await fetchAllSubjects();
         renderSubjectsTable(subjects);
     } catch (error) {
         console.error('Error loading subjects:', error);
@@ -555,26 +1706,64 @@ function renderSubjectsTable(subjects) {
     `).join('');
 }
 
-async function loadClasses() {
+async function loadClasses(reset = true) {
+    if (classesListState.loading) return;
+
     try {
-        const [classesData, subjectsData] = await Promise.all([
-            api.get('/classes'),
-            api.get('/subjects')
+        const search = (document.getElementById('classesSearchInput')?.value || '').trim();
+        const department = (document.getElementById('classesDeptFilter')?.value || '').trim();
+        const year = (document.getElementById('classesYearFilter')?.value || '').trim();
+
+        if (reset) {
+            classesListState.page = 1;
+            classesListState.items = [];
+        }
+
+        classesListState.loading = true;
+        setLoadMoreVisibility('classesLoadMoreBtn', classesListState.hasMore, true);
+
+        const params = new URLSearchParams({
+            page: String(classesListState.page),
+            limit: String(ADMIN_LIST_PAGE_SIZE)
+        });
+        if (search) params.append('search', search);
+        if (department) params.append('department', department);
+        if (year) params.append('year', year);
+
+        const [classesData, allSubjects] = await Promise.all([
+            api.get(`/classes?${params.toString()}`),
+            fetchAllSubjects()
         ]);
-        classes = classesData.classes;
-        subjects = subjectsData.subjects;
-        renderClassesTable(classes);
+
+        const incoming = classesData.classes || [];
+        classesListState.items = reset
+            ? incoming
+            : classesListState.items.concat(incoming);
+        classesListState.hasMore = !!classesData.pagination?.hasMore;
+
+        classes = classesListState.items;
+        subjects = allSubjects;
+        renderClassesTable(incoming, reset);
+        syncManagedDepartmentsFromItems(incoming);
+
+        if (classesListState.hasMore) {
+            classesListState.page += 1;
+        }
     } catch (error) {
         console.error('Error loading classes:', error);
+    } finally {
+        classesListState.loading = false;
+        setLoadMoreVisibility('classesLoadMoreBtn', classesListState.hasMore, false);
     }
 }
 
-function renderClassesTable(classes) {
-    const tbody = document.querySelector('#classesTable tbody');
-    tbody.innerHTML = classes.map(c => `
+function renderClassesTable(classItems, reset = true) {
+    const rowsHtml = classItems.map((c) => `
         <tr>
             <td>${c.className}</td>
-            <td>${c.students?.length || 0}</td>
+            <td>${c.department || '-'}</td>
+            <td>Year ${c.year || '-'}${c.batch ? ` / ${c.batch}` : ''}</td>
+            <td>${c.studentsCount ?? c.students?.length ?? 0}</td>
             <td>${c.assignedSubjects?.map(s => s.subjectName).join(', ') || 'None'}</td>
             <td class="actions">
                 <button class="btn btn-small btn-secondary" onclick="editClass('${c._id}')">Edit</button>
@@ -583,17 +1772,24 @@ function renderClassesTable(classes) {
             </td>
         </tr>
     `).join('');
+
+    appendRows('#classesTable tbody', rowsHtml, reset);
+
+    if (reset && !classItems.length) {
+        const tbody = document.querySelector('#classesTable tbody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center">No classes found</td></tr>';
+    }
 }
 
 async function loadTimetableData() {
     try {
-        const [classesData, subjectsData, usersData] = await Promise.all([
+        const [classesData, allSubjects, usersData] = await Promise.all([
             api.get('/classes'),
-            api.get('/subjects'),
+            fetchAllSubjects(),
             api.get('/auth/users?role=faculty')
         ]);
         classes = classesData.classes;
-        subjects = subjectsData.subjects;
+        subjects = allSubjects;
         timetableFaculty = usersData.users || [];
 
         const classSelect = document.getElementById('timetableClassFilter');
@@ -892,15 +2088,21 @@ async function showEditTimetableModal(entryId) {
 
 async function loadReportData() {
     try {
-        const [classesData, subjectsData] = await Promise.all([
-            api.get('/classes'),
-            api.get('/subjects')
-        ]);
-        classes = classesData.classes;
-        subjects = subjectsData.subjects;
-
         const reportClass = document.getElementById('reportClass');
         const reportSubject = document.getElementById('reportSubject');
+
+        // Reports UI was simplified; keep anomaly loading while safely handling removed filters.
+        if (!reportClass || !reportSubject) {
+            await loadAttendanceAnomalies();
+            return;
+        }
+
+        const [classesData, allSubjects] = await Promise.all([
+            api.get('/classes'),
+            fetchAllSubjects()
+        ]);
+        classes = classesData.classes;
+        subjects = allSubjects;
         
         reportClass.innerHTML = '<option value="">Select Class</option>' +
             classes.map(c => `<option value="${c._id}">${c.className}</option>`).join('');
@@ -1098,6 +2300,25 @@ function showAddUserModal() {
                 <label>Password</label>
                 <input type="password" id="modalPassword" required>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="modalPhone" placeholder="e.g. +91 9876543210">
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" id="modalDob">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Parent Email ID</label>
+                <input type="email" id="modalParentEmail" placeholder="parent@example.com">
+            </div>
+            <div class="form-group">
+                <label>Parent Numbers (multiple)</label>
+                <input type="text" id="modalParentPhones" placeholder="+91 9876543210, +91 9123456780">
+                <small>Use comma, semicolon, or new line between numbers.</small>
+            </div>
             <div class="form-group">
                 <label>Role</label>
                 <select id="modalRole" required>
@@ -1150,9 +2371,23 @@ async function addUser() {
     const password = document.getElementById('modalPassword').value;
     const role = document.getElementById('modalRole').value;
     const assignedClass = document.getElementById('modalClass').value || null;
+    const phone = document.getElementById('modalPhone').value.trim();
+    const dob = document.getElementById('modalDob').value;
+    const parentEmail = document.getElementById('modalParentEmail').value.trim();
+    const parentPhones = normalizeMultiPhoneInput(document.getElementById('modalParentPhones').value);
 
     try {
-        await api.post('/auth/register', { name, email, password, role, assignedClass });
+        await api.post('/auth/register', {
+            name,
+            email,
+            password,
+            role,
+            assignedClass,
+            phone,
+            parentEmail,
+            parentPhones,
+            dob
+        });
         closeModal();
         await loadUsers();
         await loadOverviewData();
@@ -1164,6 +2399,11 @@ async function addUser() {
 async function editUser(userId) {
     const user = users.find(u => u._id === userId);
     if (!user) return;
+
+    if (user.role === 'faculty') {
+        await editFacultyWithSubjectManager(user);
+        return;
+    }
 
     document.getElementById('modalTitle').textContent = 'Edit User';
     document.getElementById('modalBody').innerHTML = `
@@ -1179,6 +2419,25 @@ async function editUser(userId) {
             <div class="form-group">
                 <label>New Password (leave blank to keep current)</label>
                 <input type="password" id="modalPassword">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="modalPhone" value="${escapeHtml(user.phone || '')}" placeholder="e.g. +91 9876543210">
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" id="modalDob" value="${toDateInputValue(user.dob)}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Parent Email ID</label>
+                <input type="email" id="modalParentEmail" value="${escapeHtml(user.parentEmail || '')}" placeholder="parent@example.com">
+            </div>
+            <div class="form-group">
+                <label>Parent Numbers (multiple)</label>
+                <input type="text" id="modalParentPhones" value="${escapeHtml(getParentPhonesText(user))}" placeholder="+91 9876543210, +91 9123456780">
+                <small>Use comma, semicolon, or new line between numbers.</small>
             </div>
             <button type="submit" class="btn btn-primary btn-block">Update User</button>
         </form>
@@ -1196,14 +2455,310 @@ async function updateUser(userId) {
     const name = document.getElementById('modalName').value;
     const email = document.getElementById('modalEmail').value;
     const password = document.getElementById('modalPassword').value;
+    const phone = document.getElementById('modalPhone').value.trim();
+    const dob = document.getElementById('modalDob').value;
+    const parentEmail = document.getElementById('modalParentEmail').value.trim();
+    const parentPhones = normalizeMultiPhoneInput(document.getElementById('modalParentPhones').value);
 
-    const data = { name, email };
+    const data = { name, email, phone, dob, parentEmail, parentPhones };
     if (password) data.password = password;
 
     try {
         await api.put(`/auth/users/${userId}`, data);
+        alert('Profile updated successfully');
         closeModal();
         await loadUsers();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function editFacultyWithSubjectManager(user) {
+    const modalContent = document.querySelector('#modal .modal-content');
+    if (modalContent) {
+        modalContent.classList.add('modal-wide');
+    }
+
+    facultySubjectsModalState.userId = user._id;
+    facultySubjectsModalState.assignedAll = (user.assignedSubjects || []).map((s) => ({
+        _id: s._id || s,
+        subjectName: s.subjectName || 'Unknown',
+        subjectCode: s.subjectCode || ''
+    }));
+    facultySubjectsModalState.assigned = { page: 1, hasMore: false, items: [], loading: false, search: '' };
+    facultySubjectsModalState.available = { page: 1, hasMore: false, items: [], loading: false, search: '' };
+
+    document.getElementById('modalTitle').textContent = `Edit Faculty - ${user.name}`;
+    document.getElementById('modalBody').innerHTML = `
+        <form id="editFacultyProfileForm" style="margin-bottom: 12px;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="modalFacultyEditName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="modalFacultyEditEmail" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="modalFacultyEditPhone" placeholder="e.g. +91 9876543210">
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" id="modalFacultyEditDob">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Parent Email ID</label>
+                    <input type="email" id="modalFacultyEditParentEmail" placeholder="parent@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Parent Numbers (multiple)</label>
+                    <input type="text" id="modalFacultyEditParentPhones" placeholder="+91 9876543210, +91 9123456780">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:auto;">Update Profile</button>
+        </form>
+
+        <div class="form-row">
+            <div class="form-group" style="flex:1; min-width:320px;">
+                <label>Assigned Subjects</label>
+                <input type="text" id="facultyAssignedSubjectSearch" placeholder="Search in assigned subjects" onkeydown="if(event.key==='Enter'){loadAssignedFacultySubjects(true)}">
+                <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Code</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="facultyAssignedSubjectsBody"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:10px; text-align:center;">
+                    <button type="button" class="btn btn-secondary" id="facultyAssignedSubjectsLoadMoreBtn" onclick="loadAssignedFacultySubjects(false)" style="display:none;">Load More</button>
+                </div>
+            </div>
+
+            <div class="form-group" style="flex:1; min-width:320px;">
+                <label>Add Subjects (Search)</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="facultyAvailableSubjectSearch" placeholder="Search subject name/code" onkeydown="if(event.key==='Enter'){loadAvailableFacultySubjects(true)}">
+                    <button type="button" class="btn btn-secondary" onclick="loadAvailableFacultySubjects(true)">Search</button>
+                </div>
+                <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Code</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="facultyAvailableSubjectsBody"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:10px; text-align:center;">
+                    <button type="button" class="btn btn-secondary" id="facultyAvailableSubjectsLoadMoreBtn" onclick="loadAvailableFacultySubjects(false)" style="display:none;">Load More</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('modalFacultyEditName').value = user.name || '';
+    document.getElementById('modalFacultyEditEmail').value = user.email || '';
+    document.getElementById('modalFacultyEditPhone').value = user.phone || '';
+    document.getElementById('modalFacultyEditDob').value = toDateInputValue(user.dob);
+    document.getElementById('modalFacultyEditParentEmail').value = user.parentEmail || '';
+    document.getElementById('modalFacultyEditParentPhones').value = getParentPhonesText(user);
+
+    document.getElementById('editFacultyProfileForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            await api.put(`/auth/users/${user._id}`, {
+                name: document.getElementById('modalFacultyEditName').value.trim(),
+                email: document.getElementById('modalFacultyEditEmail').value.trim(),
+                phone: document.getElementById('modalFacultyEditPhone').value.trim(),
+                dob: document.getElementById('modalFacultyEditDob').value,
+                parentEmail: document.getElementById('modalFacultyEditParentEmail').value.trim(),
+                parentPhones: normalizeMultiPhoneInput(document.getElementById('modalFacultyEditParentPhones').value),
+                assignedSubjects: facultySubjectsModalState.assignedAll.map((s) => s._id)
+            });
+            alert('Profile updated successfully');
+            await loadFaculty(true);
+        } catch (error) {
+            alert(error.message);
+        }
+    });
+
+    document.getElementById('modal').classList.add('active');
+    await loadAssignedFacultySubjects(true);
+    await loadAvailableFacultySubjects(true);
+}
+
+async function loadAssignedFacultySubjects(reset = true) {
+    if (facultySubjectsModalState.assigned.loading) return;
+
+    const search = (document.getElementById('facultyAssignedSubjectSearch')?.value || '').trim().toLowerCase();
+    if (reset) {
+        facultySubjectsModalState.assigned.page = 1;
+        facultySubjectsModalState.assigned.items = [];
+        facultySubjectsModalState.assigned.search = search;
+    }
+
+    facultySubjectsModalState.assigned.loading = true;
+    setLoadMoreVisibility('facultyAssignedSubjectsLoadMoreBtn', facultySubjectsModalState.assigned.hasMore, true);
+
+    try {
+        const source = facultySubjectsModalState.assignedAll.filter((s) => {
+            const term = facultySubjectsModalState.assigned.search;
+            if (!term) return true;
+            return (s.subjectName || '').toLowerCase().includes(term)
+                || (s.subjectCode || '').toLowerCase().includes(term);
+        });
+
+        const page = facultySubjectsModalState.assigned.page;
+        const limit = 50;
+        const start = (page - 1) * limit;
+        const incoming = source.slice(start, start + limit);
+
+        facultySubjectsModalState.assigned.items = reset
+            ? incoming
+            : facultySubjectsModalState.assigned.items.concat(incoming);
+        facultySubjectsModalState.assigned.hasMore = start + incoming.length < source.length;
+
+        renderAssignedFacultySubjects(incoming, reset);
+
+        if (facultySubjectsModalState.assigned.hasMore) {
+            facultySubjectsModalState.assigned.page += 1;
+        }
+    } finally {
+        facultySubjectsModalState.assigned.loading = false;
+        setLoadMoreVisibility('facultyAssignedSubjectsLoadMoreBtn', facultySubjectsModalState.assigned.hasMore, false);
+    }
+}
+
+function renderAssignedFacultySubjects(subjectItems, reset = true) {
+    const rowsHtml = subjectItems.map((s) => `
+        <tr>
+            <td>${s.subjectName}</td>
+            <td>${s.subjectCode || '-'}</td>
+            <td><button type="button" class="btn btn-small btn-danger" onclick="removeSubjectFromFaculty('${s._id}')">Remove</button></td>
+        </tr>
+    `).join('');
+
+    appendRows('#facultyAssignedSubjectsBody', rowsHtml, reset);
+
+    if (reset && !subjectItems.length) {
+        const tbody = document.getElementById('facultyAssignedSubjectsBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center">No assigned subjects found</td></tr>';
+    }
+}
+
+async function loadAvailableFacultySubjects(reset = true) {
+    if (!facultySubjectsModalState.userId || facultySubjectsModalState.available.loading) return;
+
+    const search = (document.getElementById('facultyAvailableSubjectSearch')?.value || '').trim();
+    if (reset) {
+        facultySubjectsModalState.available.page = 1;
+        facultySubjectsModalState.available.items = [];
+        facultySubjectsModalState.available.search = search;
+    }
+
+    facultySubjectsModalState.available.loading = true;
+    setLoadMoreVisibility('facultyAvailableSubjectsLoadMoreBtn', facultySubjectsModalState.available.hasMore, true);
+
+    try {
+        const params = new URLSearchParams({
+            page: String(facultySubjectsModalState.available.page),
+            limit: String(50)
+        });
+        if (facultySubjectsModalState.available.search) {
+            params.append('search', facultySubjectsModalState.available.search);
+        }
+
+        const data = await api.get(`/subjects?${params.toString()}`);
+        const assignedSet = new Set(facultySubjectsModalState.assignedAll.map((s) => String(s._id)));
+        const incoming = (data.subjects || []).filter((s) => !assignedSet.has(String(s._id)));
+
+        facultySubjectsModalState.available.items = reset
+            ? incoming
+            : facultySubjectsModalState.available.items.concat(incoming);
+        facultySubjectsModalState.available.hasMore = !!data.pagination?.hasMore;
+
+        renderAvailableFacultySubjects(incoming, reset);
+
+        if (facultySubjectsModalState.available.hasMore) {
+            facultySubjectsModalState.available.page += 1;
+        }
+    } catch (error) {
+        console.error('Error loading available faculty subjects:', error);
+    } finally {
+        facultySubjectsModalState.available.loading = false;
+        setLoadMoreVisibility('facultyAvailableSubjectsLoadMoreBtn', facultySubjectsModalState.available.hasMore, false);
+    }
+}
+
+function renderAvailableFacultySubjects(subjectItems, reset = true) {
+    const rowsHtml = subjectItems.map((s) => `
+        <tr>
+            <td>${s.subjectName}</td>
+            <td>${s.subjectCode || '-'}</td>
+            <td><button type="button" class="btn btn-small btn-primary" onclick="addSubjectToFaculty('${s._id}')">Add</button></td>
+        </tr>
+    `).join('');
+
+    appendRows('#facultyAvailableSubjectsBody', rowsHtml, reset);
+
+    if (reset && !subjectItems.length) {
+        const tbody = document.getElementById('facultyAvailableSubjectsBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center">No matching subjects found</td></tr>';
+    }
+}
+
+async function persistFacultyAssignedSubjects() {
+    if (!facultySubjectsModalState.userId) return;
+    await api.put(`/auth/users/${facultySubjectsModalState.userId}`, {
+        assignedSubjects: facultySubjectsModalState.assignedAll.map((s) => s._id)
+    });
+}
+
+async function addSubjectToFaculty(subjectId) {
+    const subject = facultySubjectsModalState.available.items.find((s) => String(s._id) === String(subjectId));
+    if (!subject) return;
+
+    if (facultySubjectsModalState.assignedAll.some((s) => String(s._id) === String(subjectId))) return;
+
+    facultySubjectsModalState.assignedAll.push(subject);
+
+    try {
+        await persistFacultyAssignedSubjects();
+        await Promise.all([
+            loadAssignedFacultySubjects(true),
+            loadAvailableFacultySubjects(true),
+            loadFaculty(true)
+        ]);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function removeSubjectFromFaculty(subjectId) {
+    facultySubjectsModalState.assignedAll = facultySubjectsModalState.assignedAll
+        .filter((s) => String(s._id) !== String(subjectId));
+
+    try {
+        await persistFacultyAssignedSubjects();
+        await Promise.all([
+            loadAssignedFacultySubjects(true),
+            loadAvailableFacultySubjects(true),
+            loadFaculty(true)
+        ]);
     } catch (error) {
         alert(error.message);
     }
@@ -1230,56 +2785,7 @@ function editStudent(studentId) {
 }
 
 function showAddFacultyModal() {
-      document.getElementById('modalTitle').textContent = 'Add Faculty';
-      document.getElementById('modalBody').innerHTML = `
-          <form id="addFacultyForm">
-              <div class="form-group">
-                  <label>Name</label>
-                  <input type="text" id="modalFacultyName" required>
-              </div>
-              <div class="form-group">
-                  <label>Email</label>
-                  <input type="email" id="modalFacultyEmail" required>
-              </div>
-              <div class="form-group">
-                  <label>Department</label>
-                  <input type="text" id="modalFacultyDepartment" required>
-              </div>
-              <div class="form-group">
-                  <label>Faculty ID</label>
-                  <input type="text" id="modalFacultyId" required>
-              </div>
-              <div class="form-group">
-                  <label>Password</label>
-                  <input type="password" id="modalFacultyPassword" required>
-              </div>
-              <button type="submit" class="btn btn-primary btn-block">Add Faculty</button>
-          </form>
-      `;
-
-      document.getElementById('modal').classList.add('active');
-
-      document.getElementById('addFacultyForm').onsubmit = async (e) => {
-          e.preventDefault();
-          const name = document.getElementById('modalFacultyName').value;
-          const email = document.getElementById('modalFacultyEmail').value;
-          const department = document.getElementById('modalFacultyDepartment').value;
-          const uniqueId = document.getElementById('modalFacultyId').value;
-          const password = document.getElementById('modalFacultyPassword').value;
-          
-          try {
-              await api.post('/auth/register', { 
-                  name, 
-                  email, 
-                  password, 
-                  role: 'faculty',
-                  department,
-                  uniqueId
-              });
-              closeModal();
-              loadFaculty(); 
-          } catch (error) {
-              alert(error.message); } };
+    window.location.href = 'add-faculty.html';
 }
 
   function editFaculty(facultyId) {
@@ -1381,17 +2887,10 @@ function showAddClassModal() {
             <div class="form-row">
                 <div class="form-group">
                     <label>Department *</label>
-                    <select id="modalClassDept" required>
-                        <option value="">Select Department</option>
-                        <option value="CSE">CSE - Computer Science</option>
-                        <option value="ECE">ECE - Electronics</option>
-                        <option value="EEE">EEE - Electrical</option>
-                        <option value="MECH">MECH - Mechanical</option>
-                        <option value="CIVIL">CIVIL - Civil</option>
-                        <option value="IT">IT - Information Technology</option>
-                        <option value="MCA">MCA - Computer Application</option>
-                        <option value="MBA">MBA - Business Admin</option>
-                    </select>
+                    <input type="text" id="modalClassDept" list="modalClassDeptList" required placeholder="Enter or pick department">
+                    <datalist id="modalClassDeptList">
+                        ${managedDepartments.map((d) => `<option value="${escapeHtml(d)}"></option>`).join('')}
+                    </datalist>
                 </div>
                 <div class="form-group">
                     <label>Year *</label>
@@ -1459,43 +2958,242 @@ async function editClass(classId) {
     const cls = classes.find(c => c._id === classId);
     if (!cls) return;
 
-    document.getElementById('modalTitle').textContent = 'Edit Class';
+    const modalContent = document.querySelector('#modal .modal-content');
+    if (modalContent) {
+        modalContent.classList.add('modal-wide');
+    }
+
+    document.getElementById('modalTitle').textContent = `Edit Class - ${cls.className}`;
     document.getElementById('modalBody').innerHTML = `
-        <form id="editClassForm">
-            <div class="form-group">
-                <label>Class Name</label>
-                <input type="text" id="modalClassName" value="${cls.className}" required>
+        <form id="editClassNameForm" style="margin-bottom:12px;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Class Name</label>
+                    <input type="text" id="modalClassName" value="${cls.className}" required>
+                </div>
+                <div class="form-group" style="display:flex; align-items:flex-end;">
+                    <button type="submit" class="btn btn-primary" style="width:auto;">Update Name</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Subjects</label>
-                <select id="modalSubjects" multiple style="height: 120px;">
-                    ${subjects.map(s => `
-                        <option value="${s._id}" ${cls.assignedSubjects?.some(cs => cs._id === s._id) ? 'selected' : ''}>
-                            ${s.subjectName}
-                        </option>
-                    `).join('')}
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary btn-block">Update Class</button>
         </form>
+
+        <div class="form-row">
+            <div class="form-group" style="flex:1; min-width:320px;">
+                <label>Assigned Subjects</label>
+                <input type="text" id="classAssignedSubjectSearch" placeholder="Search in assigned subjects" onkeydown="if(event.key==='Enter'){loadAssignedClassSubjects(true)}">
+                <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Code</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assignedClassSubjectsBody"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:10px; text-align:center;">
+                    <button type="button" class="btn btn-secondary" id="assignedSubjectsLoadMoreBtn" onclick="loadAssignedClassSubjects(false)" style="display:none;">Load More</button>
+                </div>
+            </div>
+
+            <div class="form-group" style="flex:1; min-width:320px;">
+                <label>Add Subjects (Search)</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="classAvailableSubjectSearch" placeholder="Search subject name/code" onkeydown="if(event.key==='Enter'){loadAvailableSubjectsForClass(true)}">
+                    <button type="button" class="btn btn-secondary" onclick="loadAvailableSubjectsForClass(true)">Search</button>
+                </div>
+                <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Code</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="availableClassSubjectsBody"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:10px; text-align:center;">
+                    <button type="button" class="btn btn-secondary" id="availableSubjectsLoadMoreBtn" onclick="loadAvailableSubjectsForClass(false)" style="display:none;">Load More</button>
+                </div>
+            </div>
+        </div>
     `;
 
-    document.getElementById('editClassForm').addEventListener('submit', async (e) => {
+    document.getElementById('editClassNameForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const className = document.getElementById('modalClassName').value;
-        const selectedSubjects = Array.from(document.getElementById('modalSubjects').selectedOptions)
-            .map(opt => opt.value);
+        const className = document.getElementById('modalClassName').value.trim();
+        if (!className) return;
 
         try {
-            await api.put(`/classes/${classId}`, { className, assignedSubjectIds: selectedSubjects });
-            closeModal();
-            await loadClasses();
+            await api.put(`/classes/${classId}`, { className });
+            await loadClasses(true);
         } catch (error) {
             alert(error.message);
         }
     });
 
+    classSubjectsModalState.classId = classId;
+    classSubjectsModalState.assigned = { page: 1, hasMore: false, items: [], loading: false, search: '' };
+    classSubjectsModalState.available = { page: 1, hasMore: false, items: [], loading: false, search: '' };
+
     document.getElementById('modal').classList.add('active');
+    await loadAssignedClassSubjects(true);
+    await loadAvailableSubjectsForClass(true);
+}
+
+async function loadAssignedClassSubjects(reset = true) {
+    if (!classSubjectsModalState.classId || classSubjectsModalState.assigned.loading) return;
+
+    const search = (document.getElementById('classAssignedSubjectSearch')?.value || '').trim();
+    if (reset) {
+        classSubjectsModalState.assigned.page = 1;
+        classSubjectsModalState.assigned.items = [];
+        classSubjectsModalState.assigned.search = search;
+    }
+
+    classSubjectsModalState.assigned.loading = true;
+    setLoadMoreVisibility('assignedSubjectsLoadMoreBtn', classSubjectsModalState.assigned.hasMore, true);
+
+    try {
+        const params = new URLSearchParams({
+            page: String(classSubjectsModalState.assigned.page),
+            limit: String(50)
+        });
+        if (classSubjectsModalState.assigned.search) {
+            params.append('search', classSubjectsModalState.assigned.search);
+        }
+
+        const data = await api.get(`/classes/${classSubjectsModalState.classId}/subjects?${params.toString()}`);
+        const incoming = data.subjects || [];
+
+        classSubjectsModalState.assigned.items = reset
+            ? incoming
+            : classSubjectsModalState.assigned.items.concat(incoming);
+        classSubjectsModalState.assigned.hasMore = !!data.pagination?.hasMore;
+
+        renderAssignedClassSubjects(incoming, reset);
+
+        if (classSubjectsModalState.assigned.hasMore) {
+            classSubjectsModalState.assigned.page += 1;
+        }
+    } catch (error) {
+        console.error('Error loading assigned subjects:', error);
+    } finally {
+        classSubjectsModalState.assigned.loading = false;
+        setLoadMoreVisibility('assignedSubjectsLoadMoreBtn', classSubjectsModalState.assigned.hasMore, false);
+    }
+}
+
+function renderAssignedClassSubjects(subjectItems, reset = true) {
+    const rowsHtml = subjectItems.map((s) => `
+        <tr>
+            <td>${s.subjectName}</td>
+            <td>${s.subjectCode}</td>
+            <td><button type="button" class="btn btn-small btn-danger" onclick="removeSubjectFromClass('${s._id}')">Remove</button></td>
+        </tr>
+    `).join('');
+
+    appendRows('#assignedClassSubjectsBody', rowsHtml, reset);
+
+    if (reset && !subjectItems.length) {
+        const tbody = document.getElementById('assignedClassSubjectsBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center">No assigned subjects found</td></tr>';
+    }
+}
+
+async function loadAvailableSubjectsForClass(reset = true) {
+    if (!classSubjectsModalState.classId || classSubjectsModalState.available.loading) return;
+
+    const search = (document.getElementById('classAvailableSubjectSearch')?.value || '').trim();
+    if (reset) {
+        classSubjectsModalState.available.page = 1;
+        classSubjectsModalState.available.items = [];
+        classSubjectsModalState.available.search = search;
+    }
+
+    classSubjectsModalState.available.loading = true;
+    setLoadMoreVisibility('availableSubjectsLoadMoreBtn', classSubjectsModalState.available.hasMore, true);
+
+    try {
+        const params = new URLSearchParams({
+            page: String(classSubjectsModalState.available.page),
+            limit: String(50)
+        });
+        if (classSubjectsModalState.available.search) {
+            params.append('search', classSubjectsModalState.available.search);
+        }
+
+        const data = await api.get(`/subjects?${params.toString()}`);
+        const assignedSet = new Set(classSubjectsModalState.assigned.items.map((s) => s._id));
+        const incoming = (data.subjects || []).filter((s) => !assignedSet.has(s._id));
+
+        classSubjectsModalState.available.items = reset
+            ? incoming
+            : classSubjectsModalState.available.items.concat(incoming);
+        classSubjectsModalState.available.hasMore = !!data.pagination?.hasMore;
+
+        renderAvailableClassSubjects(incoming, reset);
+
+        if (classSubjectsModalState.available.hasMore) {
+            classSubjectsModalState.available.page += 1;
+        }
+    } catch (error) {
+        console.error('Error loading available subjects:', error);
+    } finally {
+        classSubjectsModalState.available.loading = false;
+        setLoadMoreVisibility('availableSubjectsLoadMoreBtn', classSubjectsModalState.available.hasMore, false);
+    }
+}
+
+function renderAvailableClassSubjects(subjectItems, reset = true) {
+    const rowsHtml = subjectItems.map((s) => `
+        <tr>
+            <td>${s.subjectName}</td>
+            <td>${s.subjectCode}</td>
+            <td><button type="button" class="btn btn-small btn-primary" onclick="addSubjectToClass('${s._id}')">Add</button></td>
+        </tr>
+    `).join('');
+
+    appendRows('#availableClassSubjectsBody', rowsHtml, reset);
+
+    if (reset && !subjectItems.length) {
+        const tbody = document.getElementById('availableClassSubjectsBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center">No matching subjects found</td></tr>';
+    }
+}
+
+async function addSubjectToClass(subjectId) {
+    if (!classSubjectsModalState.classId) return;
+    try {
+        await api.post(`/classes/${classSubjectsModalState.classId}/subjects`, { subjectIds: [subjectId] });
+        await Promise.all([
+            loadAssignedClassSubjects(true),
+            loadAvailableSubjectsForClass(true),
+            loadClasses(true),
+            loadOverviewData()
+        ]);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function removeSubjectFromClass(subjectId) {
+    if (!classSubjectsModalState.classId) return;
+    try {
+        await api.delete(`/classes/${classSubjectsModalState.classId}/subjects/${subjectId}`);
+        await Promise.all([
+            loadAssignedClassSubjects(true),
+            loadAvailableSubjectsForClass(true),
+            loadClasses(true),
+            loadOverviewData()
+        ]);
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
 async function manageClassStudents(classId) {
@@ -1503,46 +3201,222 @@ async function manageClassStudents(classId) {
     if (!cls) return;
 
     try {
-        const studentsData = await api.get('/auth/users?role=student');
-        const allStudents = studentsData.users;
-        const assignedStudentIds = cls.students?.map(s => s._id || s) || [];
+        const modalContent = document.querySelector('#modal .modal-content');
+        if (modalContent) {
+            modalContent.classList.add('modal-wide');
+        }
 
         document.getElementById('modalTitle').textContent = `Manage Students - ${cls.className}`;
         document.getElementById('modalBody').innerHTML = `
-            <form id="manageStudentsForm">
-                <div class="form-group">
-                    <label>Select Students</label>
-                    <select id="modalStudents" multiple style="height: 200px;">
-                        ${allStudents.map(s => `
-                            <option value="${s._id}" ${assignedStudentIds.includes(s._id) ? 'selected' : ''}>
-                                ${s.name} (${s.email})
-                            </option>
-                        `).join('')}
-                    </select>
-                    <small>Hold Ctrl/Cmd to select multiple</small>
+            <div class="form-row">
+                <div class="form-group" style="flex:1; min-width:320px;">
+                    <label>Assigned Students</label>
+                    <input type="text" id="classAssignedSearch" placeholder="Search in assigned students" onkeydown="if(event.key==='Enter'){loadAssignedClassStudents(true)}">
+                    <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email / ID</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignedClassStudentsBody"></tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top:10px; text-align:center;">
+                        <button type="button" class="btn btn-secondary" id="assignedStudentsLoadMoreBtn" onclick="loadAssignedClassStudents(false)" style="display:none;">Load More</button>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">Update Students</button>
-            </form>
+
+                <div class="form-group" style="flex:1; min-width:320px;">
+                    <label>Add Students (Search)</label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="text" id="classAvailableSearch" placeholder="Search name, email, unique ID" onkeydown="if(event.key==='Enter'){loadAvailableStudentsForClass(true)}">
+                        <button type="button" class="btn btn-secondary" onclick="loadAvailableStudentsForClass(true)">Search</button>
+                    </div>
+                    <div class="table-container" style="margin-top:8px; max-height:260px; overflow:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email / ID</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="availableClassStudentsBody"></tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top:10px; text-align:center;">
+                        <button type="button" class="btn btn-secondary" id="availableStudentsLoadMoreBtn" onclick="loadAvailableStudentsForClass(false)" style="display:none;">Load More</button>
+                    </div>
+                    <small>Tip: Search first to avoid loading a huge student list.</small>
+                </div>
+            </div>
         `;
 
-        document.getElementById('manageStudentsForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const selectedStudents = Array.from(document.getElementById('modalStudents').selectedOptions)
-                .map(opt => opt.value);
-
-            try {
-                await api.put(`/classes/${classId}`, { studentIds: selectedStudents });
-                closeModal();
-                await loadClasses();
-                await loadOverviewData();
-            } catch (error) {
-                alert(error.message);
-            }
-        });
+        classStudentsModalState.classId = classId;
+        classStudentsModalState.assigned = { page: 1, hasMore: false, items: [], loading: false, search: '' };
+        classStudentsModalState.available = { page: 1, hasMore: false, items: [], loading: false, search: '' };
 
         document.getElementById('modal').classList.add('active');
+
+        await loadAssignedClassStudents(true);
+        await loadAvailableStudentsForClass(true);
     } catch (error) {
-        console.error('Error loading students:', error);
+        console.error('Error loading class students:', error);
+    }
+}
+
+async function loadAssignedClassStudents(reset = true) {
+    if (!classStudentsModalState.classId || classStudentsModalState.assigned.loading) return;
+
+    const search = (document.getElementById('classAssignedSearch')?.value || '').trim();
+    if (reset) {
+        classStudentsModalState.assigned.page = 1;
+        classStudentsModalState.assigned.items = [];
+        classStudentsModalState.assigned.search = search;
+    }
+
+    classStudentsModalState.assigned.loading = true;
+    setLoadMoreVisibility('assignedStudentsLoadMoreBtn', classStudentsModalState.assigned.hasMore, true);
+
+    try {
+        const params = new URLSearchParams({
+            page: String(classStudentsModalState.assigned.page),
+            limit: String(50)
+        });
+        if (classStudentsModalState.assigned.search) {
+            params.append('search', classStudentsModalState.assigned.search);
+        }
+
+        const data = await api.get(`/classes/${classStudentsModalState.classId}/students?${params.toString()}`);
+        const incoming = data.students || [];
+
+        classStudentsModalState.assigned.items = reset
+            ? incoming
+            : classStudentsModalState.assigned.items.concat(incoming);
+        classStudentsModalState.assigned.hasMore = !!data.pagination?.hasMore;
+
+        renderAssignedClassStudents(incoming, reset);
+
+        if (classStudentsModalState.assigned.hasMore) {
+            classStudentsModalState.assigned.page += 1;
+        }
+    } catch (error) {
+        console.error('Error loading assigned students:', error);
+    } finally {
+        classStudentsModalState.assigned.loading = false;
+        setLoadMoreVisibility('assignedStudentsLoadMoreBtn', classStudentsModalState.assigned.hasMore, false);
+    }
+}
+
+function renderAssignedClassStudents(studentsData, reset = true) {
+    const rowsHtml = studentsData.map((s) => `
+        <tr>
+            <td>${s.name}</td>
+            <td>${s.email}<br><small>${s.uniqueId || '-'}</small></td>
+            <td><button type="button" class="btn btn-small btn-danger" onclick="removeStudentFromClass('${s._id}')">Remove</button></td>
+        </tr>
+    `).join('');
+
+    appendRows('#assignedClassStudentsBody', rowsHtml, reset);
+
+    if (reset && !studentsData.length) {
+        const tbody = document.getElementById('assignedClassStudentsBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center">No assigned students found</td></tr>';
+    }
+}
+
+async function loadAvailableStudentsForClass(reset = true) {
+    if (!classStudentsModalState.classId || classStudentsModalState.available.loading) return;
+
+    const search = (document.getElementById('classAvailableSearch')?.value || '').trim();
+    if (reset) {
+        classStudentsModalState.available.page = 1;
+        classStudentsModalState.available.items = [];
+        classStudentsModalState.available.search = search;
+    }
+
+    classStudentsModalState.available.loading = true;
+    setLoadMoreVisibility('availableStudentsLoadMoreBtn', classStudentsModalState.available.hasMore, true);
+
+    try {
+        const params = new URLSearchParams({
+            role: 'student',
+            page: String(classStudentsModalState.available.page),
+            limit: String(50)
+        });
+        if (classStudentsModalState.available.search) {
+            params.append('search', classStudentsModalState.available.search);
+        }
+
+        const data = await api.get(`/auth/users?${params.toString()}`);
+        const assignedSet = new Set(classStudentsModalState.assigned.items.map((s) => s._id));
+        const incoming = (data.users || []).filter((s) => !assignedSet.has(s._id));
+
+        classStudentsModalState.available.items = reset
+            ? incoming
+            : classStudentsModalState.available.items.concat(incoming);
+        classStudentsModalState.available.hasMore = !!data.pagination?.hasMore;
+
+        renderAvailableClassStudents(incoming, reset);
+
+        if (classStudentsModalState.available.hasMore) {
+            classStudentsModalState.available.page += 1;
+        }
+    } catch (error) {
+        console.error('Error loading available students:', error);
+    } finally {
+        classStudentsModalState.available.loading = false;
+        setLoadMoreVisibility('availableStudentsLoadMoreBtn', classStudentsModalState.available.hasMore, false);
+    }
+}
+
+function renderAvailableClassStudents(studentsData, reset = true) {
+    const rowsHtml = studentsData.map((s) => `
+        <tr>
+            <td>${s.name}</td>
+            <td>${s.email}<br><small>${s.uniqueId || '-'}${s.assignedClass?.className ? ` | In: ${s.assignedClass.className}` : ' | Unassigned'}</small></td>
+            <td><button type="button" class="btn btn-small btn-primary" onclick="addStudentToClass('${s._id}')">Add</button></td>
+        </tr>
+    `).join('');
+
+    appendRows('#availableClassStudentsBody', rowsHtml, reset);
+
+    if (reset && !studentsData.length) {
+        const tbody = document.getElementById('availableClassStudentsBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center">No matching unassigned students</td></tr>';
+    }
+}
+
+async function addStudentToClass(studentId) {
+    if (!classStudentsModalState.classId) return;
+    try {
+        await api.post(`/classes/${classStudentsModalState.classId}/students`, { studentIds: [studentId] });
+        await Promise.all([
+            loadAssignedClassStudents(true),
+            loadAvailableStudentsForClass(true),
+            loadClasses(true),
+            loadOverviewData()
+        ]);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function removeStudentFromClass(studentId) {
+    if (!classStudentsModalState.classId) return;
+    try {
+        await api.delete(`/classes/${classStudentsModalState.classId}/students/${studentId}`);
+        await Promise.all([
+            loadAssignedClassStudents(true),
+            loadAvailableStudentsForClass(true),
+            loadClasses(true),
+            loadOverviewData()
+        ]);
+    } catch (error) {
+        alert(error.message);
     }
 }
 
@@ -1590,6 +3464,10 @@ async function deleteTimetable(timetableId, closeAfterDelete = false) {
 
 function closeModal() {
     document.getElementById('modal').classList.remove('active');
+    const modalContent = document.querySelector('#modal .modal-content');
+    if (modalContent) {
+        modalContent.classList.remove('modal-wide');
+    }
 }
 
 document.addEventListener('click', (e) => {
@@ -1808,15 +3686,28 @@ async function loadAnnouncements() {
         const banner = document.getElementById('announcementBanner');
         if (banner) {
             if (response.announcements && response.announcements.length > 0) {
-                banner.innerHTML = response.announcements.map(ann => `
-                    <div class="announcement">
-                        <h4>${ann.title}</h4>
-                        <p>${ann.content}</p>
-                        <div class="announcement-meta">
-                            Posted by ${ann.createdBy?.name || 'Unknown'} on ${new Date(ann.createdAt).toLocaleDateString()}
-                        </div>
+                const announcements = response.announcements.slice(0, 3);
+                banner.innerHTML = `
+                    <div class="announcement-banner-head">
+                        <h3>Latest Announcements</h3>
+                        <span class="announcement-count">${announcements.length}</span>
                     </div>
-                `).join('');
+                    <div class="announcement-list-grid">
+                        ${announcements.map(ann => `
+                            <div class="announcement">
+                                <button type="button" class="announcement-close-btn" aria-label="Close announcement" onclick="dismissAnnouncementCard(this)">x</button>
+                                <h4>${escapeHtml(ann.title)}</h4>
+                                <p>${escapeHtml(ann.content)}</p>
+                                <div class="announcement-meta">
+                                    Posted by ${escapeHtml(ann.createdBy?.name || 'Unknown')} on ${new Date(ann.createdAt).toLocaleDateString()}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="announcement-banner-actions">
+                        <a class="btn btn-secondary btn-small" href="announcements.html">View All</a>
+                    </div>
+                `;
                 banner.style.display = 'block';
             } else {
                 banner.style.display = 'none';
@@ -1824,6 +3715,17 @@ async function loadAnnouncements() {
         }
     } catch (error) {
         console.error('Failed to load announcements:', error);
+    }
+}
+
+function dismissAnnouncementCard(button) {
+    const card = button?.closest('.announcement');
+    const banner = document.getElementById('announcementBanner');
+    if (!card || !banner) return;
+
+    card.remove();
+    if (!banner.querySelector('.announcement')) {
+        banner.style.display = 'none';
     }
 }
 

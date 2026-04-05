@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { User, AuditLog } = require('../models');
+const { User, AuditLog, Subject, Class, AppSetting } = require('../models');
 const {
   generateAccessToken,
   generateRefreshToken,
@@ -8,7 +8,14 @@ const {
   decodeTokenExpiry,
   JWT_REFRESH_SECRET
 } = require('../middleware/auth');
-const { sendAdminGeneratedPasswordEmail } = require('../services/emailService');
+const {
+  sendAdminGeneratedPasswordEmail,
+  sendPasswordResetEmail,
+  sendTemplatedEmail,
+  getEmailTemplateKeys
+} = require('../services/emailService');
+const { evaluateAutomaticEmailPolicy } = require('../services/emailPolicyService');
+const { logEmailEvent } = require('../services/emailEventService');
 
 const IP_WINDOW_MS = 15 * 60 * 1000;
 const ipLoginAttempts = new Map();
@@ -75,6 +82,47 @@ function generateRandomPassword(length = 12) {
   return password;
 }
 
+function normalizeOptionalString(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+}
+
+function normalizePhoneList(input) {
+  if (Array.isArray(input)) {
+    return Array.from(new Set(input.map((item) => normalizeOptionalString(item)).filter(Boolean)));
+  }
+
+  const raw = normalizeOptionalString(input);
+  if (!raw) return [];
+
+  return Array.from(
+    new Set(
+      raw
+        .split(/[\n,;]+/)
+        .map((part) => normalizeOptionalString(part))
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeDob(value) {
+  const raw = normalizeOptionalString(value);
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+async function getConfiguredDefaultUserPassword() {
+  try {
+    const setting = await AppSetting.findOne({ key: 'adminConfig' }).select('value');
+    const configured = normalizeOptionalString(setting?.value?.defaultUserPassword);
+    return configured || 'password';
+  } catch (_error) {
+    return 'password';
+  }
+}
+
 async function upsertLoginFailureLog({
   userId = null,
   userName = 'unknown',
@@ -129,10 +177,23 @@ async function upsertLoginFailureLog({
 const authController = {
   async register(req, res) {
     try {
-      const { name, email, password, role, assignedClass, assignedSubjects, department, uniqueId } = req.body;
+      const {
+        name,
+        email,
+        password,
+        department,
+        uniqueId,
+        phone,
+        parentEmail,
+        parentPhone,
+        parentPhones,
+        dob,
+        batch,
+        year
+      } = req.body;
 
-      if (!name || !email || !password || !role) {
-        return res.status(400).json({ error: 'All fields are required' });
+      if (!name || !email || !password) {
+        return res.status(400).json({ error: 'Name, email and password are required' });
       }
 
       const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -144,13 +205,28 @@ const authController = {
         name,
         email: email.toLowerCase(),
         password,
-        role,
-        assignedClass: assignedClass || null,
-        assignedSubjects: assignedSubjects || []
+        role: 'student',
+        assignedClass: null,
+        assignedSubjects: []
       };
       
       if (department) userData.department = department;
       if (uniqueId) userData.uniqueId = uniqueId;
+      if (batch !== undefined) userData.batch = batch;
+      if (year !== undefined && year !== null && year !== '') userData.year = parseInt(year, 10);
+
+      const normalizedPhone = normalizeOptionalString(phone);
+      const normalizedParentEmail = normalizeOptionalString(parentEmail).toLowerCase();
+      const mergedParentPhones = normalizePhoneList(parentPhones && Array.isArray(parentPhones) ? parentPhones : (parentPhones || parentPhone));
+      const normalizedDob = normalizeDob(dob);
+
+      if (normalizedPhone) userData.phone = normalizedPhone;
+      if (normalizedParentEmail) userData.parentEmail = normalizedParentEmail;
+      if (mergedParentPhones.length) {
+        userData.parentPhones = mergedParentPhones;
+        userData.parentPhone = mergedParentPhones[0];
+      }
+      if (normalizedDob) userData.dob = normalizedDob;
 
       const user = new User(userData);
 
@@ -368,14 +444,88 @@ const authController = {
 
   async getAllUsers(req, res) {
     try {
-      const { role } = req.query;
-      const query = role ? { role } : {};
-      const users = await User.find(query)
-        .populate('assignedClass')
-        .populate('assignedSubjects')
+      const {
+        role,
+        search,
+        department,
+        year,
+        batch,
+        classId,
+        page,
+        limit,
+      } = req.query;
+
+      const query = {};
+      if (role) query.role = role;
+      if (department) query.department = department;
+      if (year) query.year = parseInt(year, 10);
+      if (batch) query.batch = batch;
+      if (classId) query.assignedClass = classId;
+
+      if (search && search.trim()) {
+        const searchRegex = new RegExp(search.trim(), 'i');
+        query.$or = [
+          { name: searchRegex },
+          { email: searchRegex },
+          { uniqueId: searchRegex },
+        ];
+      }
+
+      const parsedLimit = Number(limit || 0);
+      const parsedPage = Math.max(Number(page || 1), 1);
+
+      const userQuery = User.find(query)
+        .populate('assignedClass', 'className department year batch')
+        .populate('assignedSubjects', 'subjectName subjectCode')
         .sort({ createdAt: -1 });
 
+      if (parsedLimit > 0) {
+        const safeLimit = Math.min(Math.max(parsedLimit, 1), 500);
+        const skip = (parsedPage - 1) * safeLimit;
+
+        userQuery.skip(skip).limit(safeLimit);
+
+        const [users, total] = await Promise.all([
+          userQuery,
+          User.countDocuments(query),
+        ]);
+
+        return res.json({
+          users,
+          pagination: {
+            page: parsedPage,
+            limit: safeLimit,
+            total,
+            hasMore: skip + users.length < total,
+          },
+        });
+      }
+
+      const users = await userQuery;
+
       res.json({ users });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  async getUserStats(req, res) {
+    try {
+      const [totalStudents, totalFaculty, totalSubjects, totalClasses] = await Promise.all([
+        User.countDocuments({ role: 'student' }),
+        User.countDocuments({ role: 'faculty' }),
+        Subject.countDocuments(),
+        Class.countDocuments(),
+      ]);
+
+      res.json({
+        stats: {
+          totalStudents,
+          totalFaculty,
+          totalSubjects,
+          totalClasses,
+        },
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -384,7 +534,18 @@ const authController = {
   async updateUser(req, res) {
     try {
       const { id } = req.params;
-      const { name, email, assignedClass, assignedSubjects } = req.body;
+      const {
+        name,
+        email,
+        password,
+        assignedClass,
+        assignedSubjects,
+        phone,
+        parentEmail,
+        parentPhone,
+        parentPhones,
+        dob
+      } = req.body;
 
       const user = await User.findById(id);
       if (!user) {
@@ -396,11 +557,27 @@ const authController = {
       if (email && email.toLowerCase() !== user.email) changes.push(`email: "${user.email}" -> "${email}"`);
       if (assignedClass !== undefined) changes.push(`class changed`);
       if (assignedSubjects !== undefined) changes.push(`subjects changed`);
+      if (phone !== undefined) changes.push('phone changed');
+      if (parentEmail !== undefined) changes.push('parent email changed');
+      if (parentPhone !== undefined || parentPhones !== undefined) changes.push('parent numbers changed');
+      if (dob !== undefined) changes.push('dob changed');
+      if (password) changes.push('password changed');
 
       if (name) user.name = name;
       if (email) user.email = email.toLowerCase();
       if (assignedClass !== undefined) user.assignedClass = assignedClass;
       if (assignedSubjects !== undefined) user.assignedSubjects = assignedSubjects;
+      if (phone !== undefined) user.phone = normalizeOptionalString(phone);
+      if (parentEmail !== undefined) user.parentEmail = normalizeOptionalString(parentEmail).toLowerCase();
+      if (parentPhone !== undefined || parentPhones !== undefined) {
+        const normalized = normalizePhoneList(parentPhones && Array.isArray(parentPhones) ? parentPhones : (parentPhones || parentPhone));
+        user.parentPhones = normalized;
+        user.parentPhone = normalized[0] || '';
+      }
+      if (dob !== undefined) {
+        user.dob = normalizeDob(dob);
+      }
+      if (password) user.password = password;
 
       await user.save();
 
@@ -459,7 +636,20 @@ const authController = {
 
   async addStudent(req, res) {
     try {
-      const { name, email, uniqueId, year, department, batch, assignedClass } = req.body;
+      const {
+        name,
+        email,
+        uniqueId,
+        year,
+        department,
+        batch,
+        assignedClass,
+        phone,
+        parentEmail,
+        parentPhone,
+        parentPhones,
+        dob
+      } = req.body;
 
       if (!name || !email || !uniqueId || !year || !department) {
         return res.status(400).json({ error: 'Name, email, unique ID, year, and department are required' });
@@ -475,10 +665,12 @@ const authController = {
         return res.status(400).json({ error: 'Unique ID already exists' });
       }
 
+      const defaultPassword = await getConfiguredDefaultUserPassword();
+
       const student = new User({
         name,
         email: email.toLowerCase(),
-        password: 'password',
+        password: defaultPassword,
         role: 'student',
         uniqueId,
         year: parseInt(year),
@@ -486,6 +678,19 @@ const authController = {
         batch: batch || '',
         assignedClass: assignedClass || null
       });
+
+      const normalizedPhone = normalizeOptionalString(phone);
+      const normalizedParentEmail = normalizeOptionalString(parentEmail).toLowerCase();
+      const mergedParentPhones = normalizePhoneList(parentPhones && Array.isArray(parentPhones) ? parentPhones : (parentPhones || parentPhone));
+      const normalizedDob = normalizeDob(dob);
+
+      if (normalizedPhone) student.phone = normalizedPhone;
+      if (normalizedParentEmail) student.parentEmail = normalizedParentEmail;
+      if (mergedParentPhones.length) {
+        student.parentPhones = mergedParentPhones;
+        student.parentPhone = mergedParentPhones[0];
+      }
+      if (normalizedDob) student.dob = normalizedDob;
 
       await student.save();
 
@@ -514,6 +719,226 @@ const authController = {
     }
   },
 
+  async addFaculty(req, res) {
+    try {
+      const {
+        name,
+        email,
+        uniqueId,
+        department,
+        password,
+        assignedSubjects,
+        phone,
+        parentEmail,
+        parentPhone,
+        parentPhones,
+        dob,
+        batch,
+        year,
+        assignedClass
+      } = req.body;
+
+      if (!name || !email || !uniqueId || !department) {
+        return res.status(400).json({ error: 'Name, email, unique ID, and department are required' });
+      }
+
+      const existingUser = await User.findOne({ email: email.toLowerCase() });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already registered' });
+      }
+
+      const existingUniqueId = await User.findOne({ uniqueId });
+      if (existingUniqueId) {
+        return res.status(400).json({ error: 'Unique ID already exists' });
+      }
+
+      const defaultPassword = await getConfiguredDefaultUserPassword();
+
+      let resolvedSubjectIds = [];
+      if (Array.isArray(assignedSubjects) && assignedSubjects.length > 0) {
+        const subjectDocs = await Subject.find({ _id: { $in: assignedSubjects } }).select('_id');
+        resolvedSubjectIds = subjectDocs.map((doc) => doc._id);
+      }
+
+      const faculty = new User({
+        name,
+        email: email.toLowerCase(),
+        password: normalizeOptionalString(password) || defaultPassword,
+        role: 'faculty',
+        uniqueId,
+        department,
+        batch: normalizeOptionalString(batch),
+        year: year ? parseInt(year, 10) : undefined,
+        assignedClass: assignedClass || null,
+        assignedSubjects: resolvedSubjectIds
+      });
+
+      const normalizedPhone = normalizeOptionalString(phone);
+      const normalizedParentEmail = normalizeOptionalString(parentEmail).toLowerCase();
+      const mergedParentPhones = normalizePhoneList(parentPhones && Array.isArray(parentPhones) ? parentPhones : (parentPhones || parentPhone));
+      const normalizedDob = normalizeDob(dob);
+
+      if (normalizedPhone) faculty.phone = normalizedPhone;
+      if (normalizedParentEmail) faculty.parentEmail = normalizedParentEmail;
+      if (mergedParentPhones.length) {
+        faculty.parentPhones = mergedParentPhones;
+        faculty.parentPhone = mergedParentPhones[0];
+      }
+      if (normalizedDob) faculty.dob = normalizedDob;
+
+      await faculty.save();
+
+      await AuditLog.create({
+        userId: req.user._id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'CREATE',
+        details: `New faculty added: ${faculty.email} (${uniqueId})`,
+        entityType: 'USER',
+        entityId: faculty._id,
+        ipAddress: req.ip || req.connection.remoteAddress || 'Unknown',
+        userAgent: req.get('user-agent') || '',
+        status: 'SUCCESS'
+      });
+
+      return res.status(201).json({
+        message: 'Faculty added successfully',
+        faculty: faculty.toJSON()
+      });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(400).json({ error: 'Email or Unique ID already exists' });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+  },
+
+  async bulkAddFaculty(req, res) {
+    try {
+      const { faculty } = req.body;
+
+      if (!faculty || !Array.isArray(faculty) || faculty.length === 0) {
+        return res.status(400).json({ error: 'faculty array is required' });
+      }
+
+      const defaultPassword = await getConfiguredDefaultUserPassword();
+
+      const results = { success: [], failed: [] };
+
+      for (const facultyData of faculty) {
+        try {
+          let {
+            name,
+            email,
+            uniqueId,
+            department,
+            password,
+            assignedSubjects,
+            assignedSubjectCodes,
+            phone,
+            parentEmail,
+            parentPhone,
+            parentPhones,
+            dob,
+            batch,
+            year,
+            assignedClass
+          } = facultyData;
+
+          if (typeof name === 'string') name = name.trim();
+          if (typeof email === 'string') email = email.trim().toLowerCase();
+          if (typeof uniqueId === 'string') uniqueId = uniqueId.trim();
+          if (typeof department === 'string') department = department.trim();
+          if (typeof batch === 'string') batch = batch.trim();
+          if (typeof phone === 'string') phone = phone.trim();
+          if (typeof parentEmail === 'string') parentEmail = parentEmail.trim().toLowerCase();
+
+          if (!name || !email || !uniqueId || !department) {
+            results.failed.push({ email: email || 'unknown', reason: 'Missing required fields' });
+            continue;
+          }
+
+          const existingUser = await User.findOne({ email });
+          if (existingUser) {
+            results.failed.push({ email, reason: 'Email already exists' });
+            continue;
+          }
+
+          const existingUniqueId = await User.findOne({ uniqueId });
+          if (existingUniqueId) {
+            results.failed.push({ email, reason: 'Unique ID already exists' });
+            continue;
+          }
+
+          let resolvedSubjectIds = [];
+          if (Array.isArray(assignedSubjects) && assignedSubjects.length) {
+            const byId = await Subject.find({ _id: { $in: assignedSubjects } }).select('_id');
+            resolvedSubjectIds = byId.map((doc) => doc._id);
+          } else {
+            const rawCodes = Array.isArray(assignedSubjectCodes)
+              ? assignedSubjectCodes
+              : normalizeOptionalString(assignedSubjectCodes).split(/[\n,;|]+/);
+            const codes = rawCodes.map((item) => normalizeOptionalString(item).toUpperCase()).filter(Boolean);
+            if (codes.length) {
+              const byCode = await Subject.find({ subjectCode: { $in: codes } }).select('_id');
+              resolvedSubjectIds = byCode.map((doc) => doc._id);
+            }
+          }
+
+          const facultyUser = new User({
+            name,
+            email,
+            password: normalizeOptionalString(password) || defaultPassword,
+            role: 'faculty',
+            uniqueId,
+            department,
+            batch: normalizeOptionalString(batch),
+            year: year ? parseInt(year, 10) : undefined,
+            assignedClass: assignedClass || null,
+            assignedSubjects: resolvedSubjectIds
+          });
+
+          const normalizedParentPhones = normalizePhoneList(
+            parentPhones && Array.isArray(parentPhones) ? parentPhones : (parentPhones || parentPhone)
+          );
+          const normalizedDob = normalizeDob(dob);
+
+          if (phone) facultyUser.phone = phone;
+          if (parentEmail) facultyUser.parentEmail = parentEmail;
+          if (normalizedParentPhones.length) {
+            facultyUser.parentPhones = normalizedParentPhones;
+            facultyUser.parentPhone = normalizedParentPhones[0];
+          }
+          if (normalizedDob) facultyUser.dob = normalizedDob;
+
+          await facultyUser.save();
+          results.success.push({ email: facultyUser.email, uniqueId: facultyUser.uniqueId });
+        } catch (err) {
+          results.failed.push({ email: facultyData?.email || 'unknown', reason: err.message });
+        }
+      }
+
+      await AuditLog.create({
+        userId: req.user._id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'CREATE',
+        details: `Bulk faculty addition: ${results.success.length} added, ${results.failed.length} failed`,
+        entityType: 'USER',
+        ipAddress: req.ip || req.connection.remoteAddress || 'Unknown',
+        userAgent: req.get('user-agent') || '',
+        status: results.failed.length > 0 ? 'FAILED' : 'SUCCESS'
+      });
+
+      return res.json({
+        message: `Added ${results.success.length} faculty`,
+        results
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  },
+
   async bulkAddStudents(req, res) {
     try {
       const { students } = req.body;
@@ -522,13 +947,28 @@ const authController = {
         return res.status(400).json({ error: 'Students array is required' });
       }
 
+      const defaultPassword = await getConfiguredDefaultUserPassword();
+
       console.log('Received students data:', JSON.stringify(students).substring(0, 500));
       console.log('Received students data:', JSON.stringify(students).substring(0, 1000));
       const results = { success: [], failed: [] };
 
       for (const studentData of students) {
         try {
-          let { name, email, uniqueId, year, department, batch, assignedClass } = studentData;
+          let {
+            name,
+            email,
+            uniqueId,
+            year,
+            department,
+            batch,
+            assignedClass,
+            phone,
+            parentEmail,
+            parentPhone,
+            parentPhones,
+            dob
+          } = studentData;
 
           // Trim all string values
           if (typeof name === 'string') name = name.trim();
@@ -536,6 +976,9 @@ const authController = {
           if (typeof uniqueId === 'string') uniqueId = uniqueId.trim();
           if (typeof department === 'string') department = department.trim();
           if (typeof batch === 'string') batch = batch ? batch.trim() : '';
+          if (typeof phone === 'string') phone = phone.trim();
+          if (typeof parentEmail === 'string') parentEmail = parentEmail.trim().toLowerCase();
+          if (typeof parentPhone === 'string') parentPhone = parentPhone.trim();
           
           // Convert year to number BEFORE validation
           if (year !== undefined && year !== null && year !== '') {
@@ -567,7 +1010,7 @@ const authController = {
           const student = new User({
             name,
             email: email.toLowerCase(),
-            password: 'password',
+            password: defaultPassword,
             role: 'student',
             uniqueId,
             year: parseInt(year),
@@ -575,6 +1018,19 @@ const authController = {
             batch: batch || '',
             assignedClass: assignedClass || null
           });
+
+          const normalizedParentPhones = normalizePhoneList(
+            parentPhones && Array.isArray(parentPhones) ? parentPhones : (parentPhones || parentPhone)
+          );
+          const normalizedDob = normalizeDob(dob);
+
+          if (phone) student.phone = phone;
+          if (parentEmail) student.parentEmail = parentEmail;
+          if (normalizedParentPhones.length) {
+            student.parentPhones = normalizedParentPhones;
+            student.parentPhone = normalizedParentPhones[0];
+          }
+          if (normalizedDob) student.dob = normalizedDob;
 
           await student.save();
           results.success.push({ email: student.email, uniqueId: student.uniqueId });
@@ -607,9 +1063,35 @@ const authController = {
   async forgotPassword(req, res) {
     try {
       const { email } = req.body;
-      const user = await User.findOne({ email: email.toLowerCase() });
+      const normalizedEmail = String(email || '').toLowerCase().trim();
+      if (!normalizedEmail) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+        // Return a generic response to avoid account enumeration.
+        return res.status(200).json({ message: 'If the account exists, a reset link will be sent.' });
+      }
+
+      const policy = await evaluateAutomaticEmailPolicy('passwordReset');
+      if (!policy.allowed) {
+        await logEmailEvent({
+          triggerKey: 'passwordReset',
+          templateKey: 'password_reset',
+          recipientEmail: user.email,
+          status: 'skipped',
+          source: 'auto',
+          actorUserId: user._id,
+          errorMessage: policy.reason === 'within-quiet-hours'
+            ? 'Skipped due to configured quiet hours'
+            : 'Automatic email disabled by admin settings',
+          metadata: {
+            flow: 'forgot-password',
+            policyReason: policy.reason,
+          },
+        });
+        return res.status(200).json({ message: 'If the account exists, a reset link will be sent.' });
       }
 
       // Generate token
@@ -624,12 +1106,11 @@ const authController = {
 
       await user.save();
 
-      // Send email
-      const { sendPasswordResetEmail } = require('../services/emailService');
-      
       // Also log the reset link to the console for easy local testing
-      const resetLink = `${process.env.BASE_URL || 'http://localhost:3000'}/html/reset-password.html?token=${resetToken}`;
-      console.log(`\n--- PASSWORD RESET LINK FOR ${user.email} ---\n${resetLink}\n------------------------------------------\n`);
+      if (process.env.NODE_ENV !== 'production' && process.env.LOG_PASSWORD_RESET_LINKS === 'true') {
+        const resetLink = `${process.env.BASE_URL || 'http://localhost:3000'}/html/reset-password.html?token=${resetToken}`;
+        console.log(`\n--- PASSWORD RESET LINK FOR ${user.email} ---\n${resetLink}\n------------------------------------------\n`);
+      }
 
       let emailSent = false;
       let emailError = '';
@@ -638,6 +1119,19 @@ const authController = {
       } catch (err) {
         emailError = err.message;
       }
+
+      await logEmailEvent({
+        triggerKey: 'passwordReset',
+        templateKey: 'password_reset',
+        recipientEmail: user.email,
+        status: emailSent ? 'success' : 'failed',
+        source: 'auto',
+        actorUserId: user._id,
+        errorMessage: emailSent ? '' : emailError || 'Email service returned failure',
+        metadata: {
+          flow: 'forgot-password',
+        },
+      });
 
       if (emailSent) {
         res.status(200).json({ message: 'Email sent' });
@@ -707,11 +1201,48 @@ const authController = {
 
       let emailSent = false;
       let emailError = '';
-      try {
-        await sendAdminGeneratedPasswordEmail(user.email, tempPassword);
-        emailSent = true;
-      } catch (err) {
-        emailError = err.message;
+      let emailSkippedBySettings = false;
+      const policy = await evaluateAutomaticEmailPolicy('adminPasswordReset');
+
+      if (!policy.allowed) {
+        emailSkippedBySettings = true;
+        await logEmailEvent({
+          triggerKey: 'adminPasswordReset',
+          templateKey: 'admin_password_reset',
+          recipientEmail: user.email,
+          status: 'skipped',
+          source: 'auto',
+          actorUserId: req.user._id,
+          errorMessage: policy.reason === 'within-quiet-hours'
+            ? 'Skipped due to configured quiet hours'
+            : 'Automatic email disabled by admin settings',
+          metadata: {
+            targetUserId: user._id,
+            flow: 'admin-reset-password',
+            policyReason: policy.reason,
+          },
+        });
+      } else {
+        try {
+          await sendAdminGeneratedPasswordEmail(user.email, tempPassword);
+          emailSent = true;
+        } catch (err) {
+          emailError = err.message;
+        }
+
+        await logEmailEvent({
+          triggerKey: 'adminPasswordReset',
+          templateKey: 'admin_password_reset',
+          recipientEmail: user.email,
+          status: emailSent ? 'success' : 'failed',
+          source: 'auto',
+          actorUserId: req.user._id,
+          errorMessage: emailSent ? '' : emailError || 'Email service returned failure',
+          metadata: {
+            targetUserId: user._id,
+            flow: 'admin-reset-password',
+          },
+        });
       }
 
       await AuditLog.create({
@@ -728,6 +1259,12 @@ const authController = {
         status: emailSent ? 'SUCCESS' : 'FAILED'
       });
 
+      if (emailSkippedBySettings) {
+        return res.json({
+          message: 'Password reset completed. Admin-password email trigger is disabled by settings.'
+        });
+      }
+
       if (!emailSent) {
         if (process.env.NODE_ENV !== 'production') {
           return res.json({
@@ -743,6 +1280,90 @@ const authController = {
       res.json({ message: 'Password reset successfully and sent to user email.' });
     } catch (error) {
       res.status(500).json({ error: error.message });
+    }
+  },
+
+  async sendTemplatedEmailToUser(req, res) {
+    try {
+      const { id } = req.params;
+      const { templateKey, subject, variables } = req.body || {};
+
+      if (!templateKey) {
+        return res.status(400).json({ error: 'templateKey is required' });
+      }
+
+      const allowedTemplates = getEmailTemplateKeys();
+      if (!allowedTemplates.includes(templateKey)) {
+        return res.status(400).json({
+          error: 'Invalid templateKey',
+          availableTemplates: allowedTemplates
+        });
+      }
+
+      const user = await User.findById(id).select('email name role');
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      await sendTemplatedEmail({
+        to: user.email,
+        templateKey,
+        subject,
+        variables: {
+          recipientName: user.name,
+          recipientRole: user.role,
+          ...(variables || {})
+        }
+      });
+
+      await logEmailEvent({
+        triggerKey: 'customTemplated',
+        templateKey,
+        recipientEmail: user.email,
+        status: 'success',
+        source: 'manual',
+        actorUserId: req.user._id,
+        metadata: {
+          flow: 'admin-send-templated-email',
+          targetUserId: user._id,
+        },
+      });
+
+      await AuditLog.create({
+        userId: req.user._id,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'CREATE',
+        details: `Admin sent templated email "${templateKey}" to ${user.email}`,
+        entityType: 'AUTH',
+        entityId: user._id,
+        ipAddress: req.ip || req.connection.remoteAddress || 'Unknown',
+        routePath: req.originalUrl,
+        userAgent: req.get('user-agent') || '',
+        status: 'SUCCESS'
+      });
+
+      return res.json({
+        message: 'Templated email sent successfully',
+        sentTo: user.email,
+        templateKey
+      });
+    } catch (error) {
+      await logEmailEvent({
+        triggerKey: 'customTemplated',
+        templateKey: String(req.body?.templateKey || ''),
+        recipientEmail: '',
+        status: 'failed',
+        source: 'manual',
+        actorUserId: req.user?._id || null,
+        errorMessage: error.message,
+        metadata: {
+          flow: 'admin-send-templated-email',
+          targetUserId: req.params?.id || '',
+        },
+      });
+
+      return res.status(500).json({ error: error.message });
     }
   },
 

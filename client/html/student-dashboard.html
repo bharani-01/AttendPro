@@ -37,6 +37,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     Daily Logs
                 </a></li>
+                <li><a href="#" class="nav-link" data-page="timetable">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    Timetable
+                </a></li>
                 <li><a href="#" class="nav-link" data-page="leave">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     Leave Request
@@ -44,6 +48,18 @@
                 <li><a href="#" class="nav-link" data-page="checkin">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                     QR Check-in
+                </a></li>
+                <li><a href="student-marks.html" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    My Marks
+                </a></li>
+                <li><a href="exams.html" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    Exam Schedule
+                </a></li>
+                <li><a href="announcements.html" class="nav-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                    Announcements
                 </a></li>
                 <li><a href="messages.html" class="nav-link">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
@@ -81,6 +97,8 @@
 
             <div id="pageContent">
                 <div class="page-section active" id="overview">
+                    <div id="announcementBanner" class="dashboard-announcement-banner" style="display:none;"></div>
+
                     <div class="attendance-alert" id="attendanceAlert" style="display:none;">
                         <div class="alert-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -140,6 +158,12 @@
                         <h3 class="section-title" style="margin-bottom: 20px;">Subject Details</h3>
                         <div id="subjectSummaryList"></div>
                     </div>
+
+                    <div class="timetable-widget" id="todays-schedule">
+                        <h3>Today's Schedule</h3>
+                        <div id="next-class" style="margin-bottom:10px; color: var(--gray-600); font-weight:600;"></div>
+                        <ul class="schedule-list" style="list-style:none; padding-left:0; margin:0;"></ul>
+                    </div>
                 </div>
 
                 <div class="page-section" id="attendance">
@@ -192,6 +216,40 @@
                     </div>
                 </div>
 
+                <div class="page-section" id="timetable">
+                    <div class="section-header">
+                        <h3 class="section-title">My Weekly Timetable</h3>
+                        <button class="btn btn-secondary" onclick="loadStudentTimetable()">Refresh</button>
+                    </div>
+                    <div class="timetable-container">
+                        <div id="studentTimetableClassMeta" class="timetable-class-meta">Loading class information...</div>
+                        <div class="timetable-grid-container">
+                            <table id="studentWeeklyTimetableGrid">
+                                <thead>
+                                    <tr>
+                                        <th>Day / Hour</th>
+                                        <th>I<br><small>08:05 AM - 08:55 AM</small></th>
+                                        <th>II<br><small>09:00 AM - 09:50 AM</small></th>
+                                        <th>BREAK</th>
+                                        <th>III<br><small>10:10 AM - 11:05 AM</small></th>
+                                        <th>IV<br><small>11:05 AM - 12:00 Noon</small></th>
+                                        <th>LUNCH BREAK</th>
+                                        <th>V<br><small>01:00 PM - 01:50 PM</small></th>
+                                        <th>VI<br><small>01:50 PM - 02:40 PM</small></th>
+                                        <th>BREAK</th>
+                                        <th>VII<br><small>02:55 PM - 03:45 PM</small></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="11" class="text-center">No timetable loaded</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="page-section" id="leave">
                     <div class="section-header">
                         <h3 class="section-title">Request Leave</h3>
@@ -199,14 +257,14 @@
                     <form id="leaveRequestForm" class="leave-form">
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="leaveSubject">Subject</label>
-                                <select id="leaveSubject" required>
-                                    <option value="">Select Subject</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
                                 <label for="leaveDate">Date</label>
                                 <input type="date" id="leaveDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="leaveSubject">Subject</label>
+                                <select id="leaveSubject" required>
+                                    <option value="">Select date first</option>
+                                </select>
                             </div>
                         </div>
                         <div class="form-row">
@@ -294,12 +352,6 @@
                     </div>
                 </div>
 
-                <div class="timetable-widget">
-                        <h3>Today's Schedule</h3>
-                        <div id="today-schedule">
-                            <!-- Today's schedule will be loaded here -->
-                        </div>
-                    </div>
             </div>
         </main>
     </div>

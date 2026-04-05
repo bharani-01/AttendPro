@@ -4,6 +4,8 @@ const cors = require('cors');
 const http = require('http');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 const connectDB = require('./config/database');
 const { auth, JWT_SECRET } = require('./middleware/auth');
@@ -26,12 +28,20 @@ const rbacRoutes = require('./routes/rbac');
 const substitutionRoutes = require('./routes/substitution');
 const settingsRoutes = require('./routes/settings');
 const securityRoutes = require('./routes/security');
+const infoRoutes = require('./routes/info');
+const marksRoutes = require('./routes/marks');
+const examScheduleRoutes = require('./routes/examSchedules');
+const { recordApiCall } = require('./services/infoMetrics');
+const { startRetentionCleanupJob } = require('./services/retentionCleanupService');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5001;
 
+app.set('trust proxy', 1);
+
 connectDB();
+startRetentionCleanupJob();
 
 const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
   .split(',')
@@ -60,8 +70,28 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+});
+
+const authSensitiveLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again later.' },
+});
 
 const io = new Server(server, {
   cors: {
@@ -86,6 +116,8 @@ const io = new Server(server, {
     credentials: true
   }
 });
+
+const userSocketCounts = new Map();
 
 io.use(async (socket, next) => {
   try {
@@ -125,9 +157,36 @@ io.use(async (socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  if (socket.userId) {
-    socket.join(`user:${socket.userId}`);
+  if (!socket.userId) return;
+
+  socket.join(`user:${socket.userId}`);
+
+  const currentCount = userSocketCounts.get(socket.userId) || 0;
+  const nextCount = currentCount + 1;
+  userSocketCounts.set(socket.userId, nextCount);
+
+  if (nextCount === 1) {
+    io.emit('user:presence', {
+      userId: socket.userId,
+      isOnline: true
+    });
   }
+
+  socket.on('disconnect', () => {
+    const openCount = userSocketCounts.get(socket.userId) || 0;
+    const reducedCount = Math.max(0, openCount - 1);
+
+    if (reducedCount === 0) {
+      userSocketCounts.delete(socket.userId);
+      io.emit('user:presence', {
+        userId: socket.userId,
+        isOnline: false
+      });
+      return;
+    }
+
+    userSocketCounts.set(socket.userId, reducedCount);
+  });
 });
 
 app.set('io', io);
@@ -213,6 +272,19 @@ app.use((req, res, next) => {
 
     const understandableResponse = getUnderstandableResponse(responseBody);
 
+    const normalizedRoutePath = req.originalUrl.split('?')[0];
+
+    if (normalizedRoutePath !== '/api/info/metrics') {
+      recordApiCall({
+        routePath: normalizedRoutePath,
+        method: req.method,
+        durationMs,
+        requestBytes: requestSize,
+        responseBytes: responseSize,
+        statusCode: res.statusCode
+      });
+    }
+
     console.log('_____________________________________________________');
     console.log(`Route(Method) : ${req.originalUrl} (${req.method})`);
     console.log(`Time          : ${startedAt.toISOString()} -> ${endedAt.toISOString()}`);
@@ -254,11 +326,20 @@ app.use('/api', (req, res, next) => {
   }
 
   const routePath = req.originalUrl.split('?')[0];
-  if (PUBLIC_API_ROUTES.has(routePath)) {
+  if (PUBLIC_API_ROUTES.has(routePath) || routePath.startsWith('/api/info')) {
     return next();
   }
   return auth(req, res, next);
 });
+
+app.use('/api/info', infoRoutes);
+
+app.use('/api/auth', authLimiter);
+app.use('/api/auth/login', authSensitiveLimiter);
+app.use('/api/auth/register', authSensitiveLimiter);
+app.use('/api/auth/forgot-password', authSensitiveLimiter);
+app.use('/api/auth/reset-password', authSensitiveLimiter);
+app.use('/api/auth/refresh', authSensitiveLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/subjects', subjectRoutes);
@@ -277,6 +358,8 @@ app.use('/api/rbac', rbacRoutes);
 app.use('/api/substitutions', substitutionRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/security', securityRoutes);
+app.use('/api/marks', marksRoutes);
+app.use('/api/exam-schedules', examScheduleRoutes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/html/login.html'));
@@ -300,6 +383,10 @@ app.get('/faculty-dashboard', (req, res) => {
 
 app.get('/student-dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/html/student-dashboard.html'));
+});
+
+app.get('/info', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/html/info.html'));
 });
 
 app.get('/html/:file', (req, res) => {

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Exams - AttendPro</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <style>
+        .class-picker-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .class-panel {
+            border: 1px solid var(--gray-200);
+            border-radius: 10px;
+            padding: 10px;
+            background: #fff;
+        }
+        .class-panel h4 {
+            margin: 0 0 8px;
+            font-size: 14px;
+        }
+        .class-panel input {
+            margin-bottom: 8px;
+        }
+        .class-panel-list {
+            max-height: 240px;
+            overflow: auto;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+        .class-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .class-row:last-child {
+            border-bottom: none;
+        }
+        .class-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .class-meta small {
+            color: var(--gray-600);
+        }
+        .class-search-meta {
+            font-size: 12px;
+            color: var(--gray-600);
+            margin-bottom: 8px;
+        }
+        .class-panel .btn.btn-small {
+            padding: 4px 5px;
+            font-size: 12px;
+            min-height: 28px;
+        }
+        .class-row button[data-add-class],
+        .class-row button[data-remove-class] {
+            width: auto;
+            min-width: 62px;
+            padding: 4px 10px;
+            flex: 0 0 auto;
+        }
+        @media (max-width: 960px) {
+            .class-picker-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo"><h3>AttendPro</h3><span class="sidebar-badge">Admin</span></div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="admin-dashboard.html" class="nav-link">Dashboard</a></li>
+                <li><a href="admin-dashboard.html?page=reports" class="nav-link">Reports</a></li>
+                <li><a href="admin-exams.html" class="nav-link active">Exams</a></li>
+                <li><a href="#" class="nav-link logout" id="logoutBtn">Logout</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">Menu</button>
+                    <h2 class="page-title">Manage Exams</h2>
+                </div>
+            </header>
+
+            <div class="page-section active">
+                <div class="section-header"><h3 class="section-title">Create Exam</h3></div>
+                <form id="createExamForm" class="attendance-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="examName">Exam Name</label>
+                            <input id="examName" required placeholder="CA1 / CA2 / CA3">
+                        </div>
+                        <div class="form-group">
+                            <label for="examType">Exam Type</label>
+                            <select id="examType" required>
+                                <option value="ca1">CA1</option>
+                                <option value="ca2">CA2</option>
+                                <option value="ca3">CA3</option>
+                                <option value="midterm">Midterm</option>
+                                <option value="model">Model</option>
+                                <option value="assignment">Assignment</option>
+                                <option value="regular">Regular</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="marksType">Marks Type</label>
+                            <select id="marksType" required>
+                                <option value="written">Written</option>
+                                <option value="internal">Internal</option>
+                                <option value="mixed">Mixed</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="totalMarks">Total Marks</label>
+                            <input id="totalMarks" type="number" min="1" required value="100">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="internalOutOf">Internal Exam Marks Out Of</label>
+                            <input id="internalOutOf" type="number" min="0" value="25">
+                        </div>
+                        <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;">
+                            <button type="submit" class="btn btn-primary">Create Exam</button>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="width:100%;">
+                            <label>Select Classes (Exam applies only to these classes)</label>
+                            <div class="class-picker-grid">
+                                <div class="class-panel">
+                                    <h4>Available Classes</h4>
+                                    <input id="availableClassSearch" type="text" placeholder="Search available classes...">
+                                    <div id="availableClassSearchMeta" class="class-search-meta">0 available</div>
+                                    <div id="availableClassList" class="class-panel-list"></div>
+                                </div>
+                                <div class="class-panel">
+                                    <h4>Selected Classes</h4>
+                                    <input id="selectedClassSearch" type="text" placeholder="Search selected classes...">
+                                    <div id="selectedClassSearchMeta" class="class-search-meta">0 selected</div>
+                                    <div id="selectedClassList" class="class-panel-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="section-header" style="margin-top:18px;"><h3 class="section-title">Available Exams</h3></div>
+                <div class="table-container">
+                    <table id="examsTable">
+                        <thead>
+                            <tr>
+                                <th>Exam Name</th>
+                                <th>Type</th>
+                                <th>Marks Type</th>
+                                <th>Total Marks</th>
+                                <th>Internal Out Of</th>
+                                <th>Classes</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/admin-exams.js"></script>
+</body>
+</html>

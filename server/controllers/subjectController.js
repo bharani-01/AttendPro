@@ -38,7 +38,44 @@ const subjectController = {
 
   async getAll(req, res) {
     try {
-      const subjects = await Subject.find().sort({ subjectName: 1 });
+      const { search, page, limit } = req.query;
+      const query = {};
+
+      if (search && search.trim()) {
+        const searchRegex = new RegExp(search.trim(), 'i');
+        query.$or = [
+          { subjectName: searchRegex },
+          { subjectCode: searchRegex }
+        ];
+      }
+
+      const parsedLimit = Number(limit || 0);
+      const parsedPage = Math.max(Number(page || 1), 1);
+
+      if (parsedLimit > 0) {
+        const safeLimit = Math.min(Math.max(parsedLimit, 1), 200);
+        const skip = (parsedPage - 1) * safeLimit;
+
+        const [subjects, total] = await Promise.all([
+          Subject.find(query)
+            .sort({ subjectName: 1 })
+            .skip(skip)
+            .limit(safeLimit),
+          Subject.countDocuments(query)
+        ]);
+
+        return res.json({
+          subjects,
+          pagination: {
+            page: parsedPage,
+            limit: safeLimit,
+            total,
+            hasMore: skip + subjects.length < total
+          }
+        });
+      }
+
+      const subjects = await Subject.find(query).sort({ subjectName: 1 });
       res.json({ subjects });
     } catch (error) {
       res.status(500).json({ error: error.message });

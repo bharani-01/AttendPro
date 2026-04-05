@@ -1,4 +1,10 @@
-const { Conversation, Message, User, Class, Timetable } = require('../models');
+const { Conversation, Message, User } = require('../models');
+const { getAdminConfigSetting } = require('../services/emailPolicyService');
+
+function canUsersMessageEachOther(senderRole, receiverRole) {
+  // Only student-to-student messaging is forbidden.
+  return !(senderRole === 'student' && receiverRole === 'student');
+}
 
 const messageController = {
   // Start a new conversation or get an existing one
@@ -16,6 +22,19 @@ const messageController = {
         return res.status(400).json({ error: 'You cannot start a conversation with yourself.' });
       }
 
+      const [sender, receiver] = await Promise.all([
+        User.findById(senderId).select('role'),
+        User.findById(receiverId).select('role')
+      ]);
+
+      if (!sender || !receiver) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (!canUsersMessageEachOther(sender.role, receiver.role)) {
+        return res.status(403).json({ error: 'Student to student conversation is not allowed.' });
+      }
+
       const participants = [senderId, receiverId].sort();
 
       let conversation = await Conversation.findOne({
@@ -23,12 +42,6 @@ const messageController = {
       });
 
       if (!conversation) {
-        // Ensure both users exist before creating a conversation
-        const receiver = await User.findById(receiverId);
-        if (!receiver) {
-          return res.status(404).json({ error: 'Receiver not found' });
-        }
-        
         conversation = new Conversation({
           participants
         });
@@ -44,7 +57,7 @@ const messageController = {
   // Send a new message
   async sendMessage(req, res) {
     try {
-      const { conversationId, receiverId, content } = req.body;
+      const { conversationId, receiverId, content, replyToMessageId } = req.body;
       const senderId = req.user._id;
 
       if (!conversationId || !content) {
@@ -61,39 +74,107 @@ const messageController = {
         return res.status(403).json({ error: 'You are not a participant of this conversation' });
       }
 
+      let resolvedReceiverId = receiverId;
+      if (!resolvedReceiverId) {
+        resolvedReceiverId = conversation.participants.find(
+          (participantId) => String(participantId) !== String(senderId)
+        );
+      }
+
+      if (!resolvedReceiverId) {
+        return res.status(400).json({ error: 'Receiver ID is required' });
+      }
+
+      const [sender, receiver] = await Promise.all([
+        User.findById(senderId).select('role'),
+        User.findById(resolvedReceiverId).select('role')
+      ]);
+
+      if (!sender || !receiver) {
+        return res.status(404).json({ error: 'Sender or receiver not found' });
+      }
+
+      if (!canUsersMessageEachOther(sender.role, receiver.role)) {
+        return res.status(403).json({ error: 'Student to student messaging is not allowed.' });
+      }
+
+      const settings = await getAdminConfigSetting();
+      const rules = settings.communicationRules;
+      const moderated = rules.applyToDirectMessages && rules.approvalWorkflowEnabled && req.user.role !== 'admin';
+
+      let expiresAt = null;
+      let scheduledDeleteAt = null;
+
+      if (rules.applyToDirectMessages) {
+        expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + Number(rules.defaultVisibilityDays || 7));
+
+        scheduledDeleteAt = new Date();
+        scheduledDeleteAt.setDate(scheduledDeleteAt.getDate() + Number(rules.autoDeleteAfterDays || 90));
+      }
+
+      let replyTo = null;
+      if (replyToMessageId) {
+        const parentMessage = await Message.findById(replyToMessageId).select('conversationId');
+        if (!parentMessage) {
+          return res.status(400).json({ error: 'Reply target message not found.' });
+        }
+        if (String(parentMessage.conversationId) !== String(conversationId)) {
+          return res.status(400).json({ error: 'Reply target must belong to the same conversation.' });
+        }
+        replyTo = parentMessage._id;
+      }
+
       const message = new Message({
         conversationId,
         sender: senderId,
-        receiver: receiverId,
-        content
+        receiver: resolvedReceiverId,
+        content,
+        replyTo,
+        approvalStatus: moderated ? 'pending' : 'approved',
+        approvedBy: moderated ? null : senderId,
+        approvedAt: moderated ? null : new Date(),
+        expiresAt,
+        scheduledDeleteAt,
       });
 
       await message.save();
 
       const populatedMessage = await Message.findById(message._id)
         .populate('sender', 'name role')
-        .populate('receiver', 'name role');
+        .populate('receiver', 'name role')
+        .populate({
+          path: 'replyTo',
+          select: 'content sender createdAt',
+          populate: {
+            path: 'sender',
+            select: 'name role'
+          }
+        });
 
       // Update the last message in the conversation
       conversation.lastMessage = message._id;
       await conversation.save();
 
       const io = req.app.get('io');
-      if (io) {
+      if (io && !moderated) {
         const payload = {
           conversationId: String(conversationId),
           message: populatedMessage
         };
 
         io.to(`user:${String(senderId)}`).emit('message:new', payload);
-        if (receiverId) {
-          io.to(`user:${String(receiverId)}`).emit('message:new', payload);
+        if (resolvedReceiverId) {
+          io.to(`user:${String(resolvedReceiverId)}`).emit('message:new', payload);
         }
       }
 
       // TODO: Implement real-time notifications (e.g., WebSockets)
 
-      res.status(201).json({ message: 'Message sent successfully', data: populatedMessage });
+      res.status(201).json({
+        message: moderated ? 'Message submitted for approval' : 'Message sent successfully',
+        data: populatedMessage,
+      });
     } catch (error) {
       res.status(500).json({ error: 'Failed to send message: ' + error.message });
     }
@@ -115,9 +196,21 @@ const messageController = {
         return res.status(403).json({ error: 'You are not authorized to view these messages' });
       }
 
-      const messages = await Message.find({ conversationId })
+      const messages = await Message.find({
+        conversationId,
+        approvalStatus: 'approved',
+        $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }]
+      })
         .populate('sender', 'name role')
         .populate('receiver', 'name role')
+        .populate({
+          path: 'replyTo',
+          select: 'content sender createdAt',
+          populate: {
+            path: 'sender',
+            select: 'name role'
+          }
+        })
         .sort({ createdAt: 'asc' });
 
       // Mark messages as read
@@ -146,6 +239,15 @@ const messageController = {
   async getConversations(req, res) {
     try {
       const userId = req.user._id;
+      const io = req.app.get('io');
+      const isUserOnline = (targetUserId) => {
+        if (!io || !io.sockets || !io.sockets.adapter || !io.sockets.adapter.rooms) {
+          return false;
+        }
+        const room = io.sockets.adapter.rooms.get(`user:${String(targetUserId)}`);
+        return Boolean(room && room.size > 0);
+      };
+
       const conversations = await Conversation.find({ participants: userId })
         .populate('participants', 'name role email')
         .populate({
@@ -163,8 +265,14 @@ const messageController = {
           receiver: userId,
           isRead: false
         });
+        const convoObj = convo.toObject();
+        convoObj.participants = (convoObj.participants || []).map((participant) => ({
+          ...participant,
+          isOnline: isUserOnline(participant._id)
+        }));
+
         return {
-          ...convo.toObject(),
+          ...convoObj,
           unreadCount
         };
       }));
@@ -175,79 +283,57 @@ const messageController = {
     }
   },
 
+  async getConversationUserProfile(req, res) {
+    try {
+      const requesterId = req.user._id;
+      const { userId } = req.params;
+
+      if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
+      }
+
+      const isSelf = String(requesterId) === String(userId);
+      if (!isSelf) {
+        const hasConversation = await Conversation.exists({
+          participants: { $all: [requesterId, userId] }
+        });
+
+        if (!hasConversation) {
+          return res.status(403).json({ error: 'Not authorized to view this profile' });
+        }
+      }
+
+      const profile = await User.findById(userId)
+        .select('name email role uniqueId department batch year phone parentEmail parentPhone parentPhones dob assignedClass assignedSubjects createdAt')
+        .populate('assignedClass', 'className department batch year section')
+        .populate('assignedSubjects', 'subjectName subjectCode');
+
+      if (!profile) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const io = req.app.get('io');
+      const room = io?.sockets?.adapter?.rooms?.get(`user:${String(userId)}`);
+      const isOnline = Boolean(room && room.size > 0);
+
+      const profileObj = profile.toObject();
+      profileObj.isOnline = isOnline;
+
+      return res.status(200).json({ profile: profileObj });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to fetch user profile: ' + error.message });
+    }
+  },
+
   // Get a list of users a student can message (their faculty)
   async getStudentMessagableUsers(req, res) {
     try {
         const studentId = req.user._id;
 
-        const student = await User.findById(studentId).select('assignedClass department batch year');
-        if (!student) {
-          return res.status(404).json({ error: 'Student not found' });
-        }
-
-        const classQuery = { students: studentId };
-        if (student.assignedClass) {
-          classQuery.$or = [
-            { _id: student.assignedClass },
-            { students: studentId }
-          ];
-          delete classQuery.students;
-        }
-
-        const studentClasses = await Class.find(classQuery).select('assignedSubjects _id');
-        const classIds = [...new Set(studentClasses.map((c) => String(c._id)))];
-
-        if (!classIds.length && student.assignedClass) {
-          classIds.push(String(student.assignedClass));
-        }
-
-        const subjectIds = [...new Set(
-          studentClasses
-            .flatMap((c) => (Array.isArray(c.assignedSubjects) ? c.assignedSubjects : []))
-            .map((id) => String(id))
-        )];
-
-        const facultyIdSet = new Set();
-
-        if (subjectIds.length) {
-          const subjectFaculty = await User.find({
-            role: 'faculty',
-            assignedSubjects: { $in: subjectIds }
-          }).select('_id');
-          subjectFaculty.forEach((u) => facultyIdSet.add(String(u._id)));
-        }
-
-        if (classIds.length) {
-          const timetableRows = await Timetable.find({
-            class: { $in: classIds }
-          }).select('faculty');
-          timetableRows.forEach((row) => {
-            if (row.faculty) {
-              facultyIdSet.add(String(row.faculty));
-            }
-          });
-        }
-
-        const existingConversations = await Conversation.find({ participants: studentId }).select('participants');
-        existingConversations.forEach((convo) => {
-          (convo.participants || []).forEach((participantId) => {
-            const id = String(participantId);
-            if (id !== String(studentId)) {
-              facultyIdSet.add(id);
-            }
-          });
-        });
-
-        const query = { role: 'faculty' };
-        if (facultyIdSet.size) {
-          query._id = { $in: [...facultyIdSet] };
-        } else if (student.department && student.year) {
-          // Practical fallback for partially seeded data.
-          query.department = student.department;
-          query.year = student.year;
-        }
-
-        const messagableUsers = await User.find(query)
+        const messagableUsers = await User.find({
+          _id: { $ne: studentId },
+          role: { $ne: 'student' }
+        })
           .select('name email role uniqueId')
           .sort({ name: 1 });
 
@@ -262,72 +348,66 @@ const messageController = {
     try {
         const facultyId = req.user._id;
 
-        const faculty = await User.findById(facultyId).select('assignedSubjects department year');
-        const subjectIds = (faculty?.assignedSubjects || []).map((id) => id.toString());
-
-        const classIdSet = new Set();
-        const studentIdSet = new Set();
-
-        if (subjectIds.length) {
-          const classesBySubject = await Class.find({ assignedSubjects: { $in: subjectIds } }).select('students _id');
-          classesBySubject.forEach((c) => {
-            classIdSet.add(String(c._id));
-            (Array.isArray(c.students) ? c.students : []).forEach((studentId) => {
-              studentIdSet.add(String(studentId));
-            });
-          });
-        }
-
-        const timetableRows = await Timetable.find({ faculty: facultyId }).select('class');
-        timetableRows.forEach((row) => {
-          if (row.class) {
-            classIdSet.add(String(row.class));
-          }
-        });
-
-        if (classIdSet.size) {
-          const classesByTimetable = await Class.find({ _id: { $in: [...classIdSet] } }).select('students');
-          classesByTimetable.forEach((c) => {
-            (Array.isArray(c.students) ? c.students : []).forEach((studentId) => {
-              studentIdSet.add(String(studentId));
-            });
-          });
-        }
-
-        const existingConversations = await Conversation.find({ participants: facultyId }).select('participants');
-        existingConversations.forEach((convo) => {
-          (convo.participants || []).forEach((participantId) => {
-            const id = String(participantId);
-            if (id !== String(facultyId)) {
-              studentIdSet.add(id);
-            }
-          });
-        });
-
-        const query = { role: 'student' };
-        if (studentIdSet.size || classIdSet.size) {
-          query.$or = [];
-          if (studentIdSet.size) {
-            query.$or.push({ _id: { $in: [...studentIdSet] } });
-          }
-          if (classIdSet.size) {
-            query.$or.push({ assignedClass: { $in: [...classIdSet] } });
-          }
-        } else if (faculty?.department) {
-          // Fallback for partially mapped seed data.
-          query.department = faculty.department;
-          if (faculty.year) {
-            query.year = faculty.year;
-          }
-        }
-
-        const messagableUsers = await User.find(query)
+        const messagableUsers = await User.find({
+          _id: { $ne: facultyId }
+        })
           .select('name email role uniqueId')
           .sort({ name: 1 });
 
         res.status(200).json({ messagableUsers });
     } catch (error) {
         res.status(500).json({ error: 'Failed to get messagable users: ' + error.message });
+    }
+  },
+
+  async getPendingMessages(req, res) {
+    try {
+      const pendingMessages = await Message.find({ approvalStatus: 'pending' })
+        .populate('sender', 'name role email')
+        .populate('receiver', 'name role email')
+        .sort({ createdAt: -1 })
+        .limit(200);
+
+      return res.status(200).json({ pendingMessages });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to get pending messages: ' + error.message });
+    }
+  },
+
+  async reviewMessage(req, res) {
+    try {
+      const { id } = req.params;
+      const { decision, reason } = req.body || {};
+
+      if (!['approve', 'reject'].includes(String(decision || '').toLowerCase())) {
+        return res.status(400).json({ error: 'decision must be approve or reject' });
+      }
+
+      const message = await Message.findById(id);
+      if (!message) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      if (String(decision).toLowerCase() === 'approve') {
+        message.approvalStatus = 'approved';
+        message.approvedBy = req.user._id;
+        message.approvedAt = new Date();
+        message.rejectedReason = '';
+      } else {
+        message.approvalStatus = 'rejected';
+        message.approvedBy = req.user._id;
+        message.approvedAt = new Date();
+        message.rejectedReason = String(reason || '').trim();
+      }
+
+      await message.save();
+
+      return res.status(200).json({
+        message: 'Message review updated',
+        reviewedMessage: message,
+      });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to review message: ' + error.message });
     }
   }
 };

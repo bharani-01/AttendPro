@@ -10,11 +10,20 @@ router.post('/conversations', auth, messageController.getOrCreateConversation);
 // Get all conversations for the logged-in user
 router.get('/conversations', auth, messageController.getConversations);
 
+// Get full profile for a user in the current user's conversation list
+router.get('/users/:userId/profile', auth, messageController.getConversationUserProfile);
+
 // Get messages for a specific conversation
 router.get('/conversations/:conversationId', auth, messageController.getMessages);
 
 // Send a message
 router.post('/messages', auth, messageController.sendMessage);
+
+// Get pending direct messages for moderation (admin)
+router.get('/messages/pending', auth, roleCheck('admin'), messageController.getPendingMessages);
+
+// Review a pending direct message (admin)
+router.post('/messages/:id/review', auth, roleCheck('admin'), messageController.reviewMessage);
 
 // Get users that the current user can message
 router.get('/messagable-users', auth, (req, res) => {
