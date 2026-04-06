@@ -170,7 +170,7 @@ async function loadPageData(page) {
             await loadOverviewData();
             break;
         case 'timetable':
-            await loadTodayTimetable();
+            await loadWeeklyTimetable();
             break;
         case 'mark':
             await loadAttendanceFormData();
@@ -374,50 +374,18 @@ async function renderAttendanceOverviewChart() {
 function renderTodayTimetable(timetables) {
     const container = document.getElementById('todayTimetableList');
     if (!container) return;
-
     if (!timetables || timetables.length === 0) {
-        container.innerHTML = '<div class="no-data-msg">No classes scheduled for today</div>';
+        container.innerHTML = '<p class="text-center">No classes scheduled for today</p>';
         return;
     }
 
-    // Sort by period to ensure order
-    const sortedTimetables = [...timetables].sort((a, b) => (a.period || 0) - (b.period || 0));
-    
-    // Find max period to determine table columns
-    const maxPeriod = Math.max(...sortedTimetables.map(t => t.period || 1), 7);
-    
-    let tableHtml = `
-        <div class="timetable-scroll">
-            <table class="timetable-table">
-                <thead>
-                    <tr>
-                        <th>Period</th>
-                        ${Array.from({ length: maxPeriod }, (_, i) => `<th>${i + 1}</th>`).join('')}
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>Subject</strong></td>
-                        ${Array.from({ length: maxPeriod }, (_, i) => {
-                            const period = i + 1;
-                            const t = sortedTimetables.find(item => item.period === period);
-                            return `<td>${t ? (t.subject?.subjectCode || t.subject?.subjectName || '-') : '-'}</td>`;
-                        }).join('')}
-                    </tr>
-                    <tr>
-                        <td><strong>Class</strong></td>
-                        ${Array.from({ length: maxPeriod }, (_, i) => {
-                            const period = i + 1;
-                            const t = sortedTimetables.find(item => item.period === period);
-                            return `<td>${t ? (t.class?.className || '-') : '-'}</td>`;
-                        }).join('')}
-                    </tr>
-                </tbody>
-            </table>
+    container.innerHTML = timetables.map(t => `
+        <div class="today-item">
+            <span class="period">Period ${t.period}</span>
+            <span class="class-name">${t.class?.className || 'N/A'}</span>
+            <span class="subject">${t.subject?.subjectName || 'N/A'}</span>
         </div>
-    `;
-
-    container.innerHTML = tableHtml;
+    `).join('');
 }
 
 async function loadTodayTimetable() {
@@ -444,6 +412,65 @@ async function loadTodayTimetable() {
     }
 }
 
+async function loadWeeklyTimetable() {
+    try {
+        const data = await api.get(`/timetable?facultyId=${currentUser._id}`);
+        const timetables = data.timetables || [];
+
+        const tbody = document.querySelector('#facultyWeeklyTimetableTable tbody');
+        if (!tbody) return;
+
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        tbody.innerHTML = days.map(day => {
+            // Mapping UI columns to data periods
+            // Col 1: Day
+            // Col 2: P1
+            // Col 3: P2
+            // Col 4: BREAK (Vertical Text)
+            // Col 5: P3
+            // Col 6: P4
+            // Col 7: LUNCH BREAK (Vertical Text)
+            // Col 8: P5
+            // Col 9: P6
+            // Col 10: BREAK (Vertical Text)
+            // Col 11: P7
+
+            const getCell = (period) => {
+                const entry = timetables.find(t => t.day === day && t.period === period);
+                if (entry) {
+                    return `
+                        <td class="timetable-cell-content">
+                            <div class="subject-code-name">${entry.subject?.subjectCode || ''} - ${entry.subject?.subjectName || '-'}</div>
+                            <div class="cell-detail"><strong>Class:</strong> ${entry.class?.className || '-'}</div>
+                            <div class="cell-detail"><strong>Room:</strong> ${entry.roomNo || '-'}</div>
+                        </td>
+                    `;
+                }
+                return `<td></td>`;
+            };
+
+            return `
+                <tr>
+                    <td class="day-cell">${day}</td>
+                    ${getCell(1)}
+                    ${getCell(2)}
+                    <td class="vertical-break-cell"><span>BREAK</span></td>
+                    ${getCell(3)}
+                    ${getCell(4)}
+                    <td class="vertical-break-cell"><span>LUNCH BREAK</span></td>
+                    ${getCell(5)}
+                    ${getCell(6)}
+                    <td class="vertical-break-cell"><span>BREAK</span></td>
+                    ${getCell(7)}
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading weekly timetable:', error);
+    }
+}
+
 async function loadFacultyTimetable(day) {
     try {
         const data = await api.get(`/timetable?facultyId=${currentUser._id}`);
@@ -454,18 +481,31 @@ async function loadFacultyTimetable(day) {
             console.error('#facultyTimetableTable tbody not found');
             return;
         }
-        if (dayTimetables.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" class="text-center">No classes on ${day}</td></tr>`;
-            return;
-        }
 
-        tbody.innerHTML = dayTimetables.map(t => `
-            <tr>
-                <td>${t.period}</td>
-                <td>${t.class?.className || 'N/A'}</td>
-                <td>${t.subject?.subjectName || 'N/A'}</td>
-            </tr>
-        `).join('');
+        // Define periods (adjust based on your actual period structure, usually 1 to 8)
+        const periods = [1, 2, 3, 4, 5, 6, 7, 8];
+        
+        tbody.innerHTML = periods.map(period => {
+            const timetableEntry = dayTimetables.find(t => t.period === period);
+            
+            if (timetableEntry) {
+                return `
+                    <tr>
+                        <td class="period-cell">${period}</td>
+                        <td>${timetableEntry.class?.className || 'N/A'}</td>
+                        <td>${timetableEntry.subject?.subjectName || 'N/A'}</td>
+                    </tr>
+                `;
+            } else {
+                return `
+                    <tr>
+                        <td class="period-cell">${period}</td>
+                        <td class="free-period">-</td>
+                        <td class="free-period">-</td>
+                    </tr>
+                `;
+            }
+        }).join('');
     } catch (error) {
         console.error('Error loading timetable:', error);
     }

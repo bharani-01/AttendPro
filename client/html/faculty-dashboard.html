@@ -145,35 +145,49 @@
 
                 <div class="page-section" id="timetable">
                     <div class="section-header">
-                        <h3 class="section-title">My Timetable</h3>
+                        <h3 class="section-title">My Weekly Timetable</h3>
                     </div>
                     <div class="timetable-container">
-                        <div class="day-selector">
-                            <button class="day-btn active" data-day="Monday">Mon</button>
-                            <button class="day-btn" data-day="Tuesday">Tue</button>
-                            <button class="day-btn" data-day="Wednesday">Wed</button>
-                            <button class="day-btn" data-day="Thursday">Thu</button>
-                            <button class="day-btn" data-day="Friday">Fri</button>
-                            <button class="day-btn" data-day="Saturday">Sat</button>
-                        </div>
                         <div class="table-container">
-                            <table id="facultyTimetableTable">
+                            <table id="facultyWeeklyTimetableTable" class="weekly-timetable">
                                 <thead>
                                     <tr>
-                                        <th>Period</th>
-                                        <th>Class</th>
-                                        <th>Subject</th>
+                                        <th class="day-hour-head">DAY / HOUR</th>
+                                        <th>
+                                            <div class="period-name">I</div>
+                                            <div class="period-time">08:05 AM - 08:55 AM</div>
+                                        </th>
+                                        <th>
+                                            <div class="period-name">II</div>
+                                            <div class="period-time">09:00 AM - 09:50 AM</div>
+                                        </th>
+                                        <th class="break-head">BREAK</th>
+                                        <th>
+                                            <div class="period-name">III</div>
+                                            <div class="period-time">10:10 AM - 11:05 AM</div>
+                                        </th>
+                                        <th>
+                                            <div class="period-name">IV</div>
+                                            <div class="period-time">11:05 AM - 12:00 NOON</div>
+                                        </th>
+                                        <th class="break-head">LUNCH BREAK</th>
+                                        <th>
+                                            <div class="period-name">V</div>
+                                            <div class="period-time">01:00 PM - 01:50 PM</div>
+                                        </th>
+                                        <th>
+                                            <div class="period-name">VI</div>
+                                            <div class="period-time">01:50 PM - 02:40 PM</div>
+                                        </th>
+                                        <th class="break-head">BREAK</th>
+                                        <th>
+                                            <div class="period-name">VII</div>
+                                            <div class="period-time">02:55 PM - 03:45 PM</div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
                             </table>
-                        </div>
-                    </div>
-
-                    <div class="timetable-widget">
-                        <h3>Today's Schedule</h3>
-                        <div id="today-schedule">
-                            <!-- Today's schedule will be loaded here -->
                         </div>
                     </div>
                 </div>
