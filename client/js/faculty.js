@@ -374,18 +374,50 @@ async function renderAttendanceOverviewChart() {
 function renderTodayTimetable(timetables) {
     const container = document.getElementById('todayTimetableList');
     if (!container) return;
+
     if (!timetables || timetables.length === 0) {
-        container.innerHTML = '<p class="text-center">No classes scheduled for today</p>';
+        container.innerHTML = '<div class="no-data-msg">No classes scheduled for today</div>';
         return;
     }
 
-    container.innerHTML = timetables.map(t => `
-        <div class="today-item">
-            <span class="period">Period ${t.period}</span>
-            <span class="class-name">${t.class?.className || 'N/A'}</span>
-            <span class="subject">${t.subject?.subjectName || 'N/A'}</span>
+    // Sort by period to ensure order
+    const sortedTimetables = [...timetables].sort((a, b) => (a.period || 0) - (b.period || 0));
+    
+    // Find max period to determine table columns
+    const maxPeriod = Math.max(...sortedTimetables.map(t => t.period || 1), 7);
+    
+    let tableHtml = `
+        <div class="timetable-scroll">
+            <table class="timetable-table">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        ${Array.from({ length: maxPeriod }, (_, i) => `<th>${i + 1}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Subject</strong></td>
+                        ${Array.from({ length: maxPeriod }, (_, i) => {
+                            const period = i + 1;
+                            const t = sortedTimetables.find(item => item.period === period);
+                            return `<td>${t ? (t.subject?.subjectCode || t.subject?.subjectName || '-') : '-'}</td>`;
+                        }).join('')}
+                    </tr>
+                    <tr>
+                        <td><strong>Class</strong></td>
+                        ${Array.from({ length: maxPeriod }, (_, i) => {
+                            const period = i + 1;
+                            const t = sortedTimetables.find(item => item.period === period);
+                            return `<td>${t ? (t.class?.className || '-') : '-'}</td>`;
+                        }).join('')}
+                    </tr>
+                </tbody>
+            </table>
         </div>
-    `).join('');
+    `;
+
+    container.innerHTML = tableHtml;
 }
 
 async function loadTodayTimetable() {
