@@ -192,33 +192,25 @@ async function loadPageData(page) {
 
 async function loadInitialData() {
     try {
-        const [profileData, todayData, weekData] = await Promise.all([
+        const [profileData, statsData, todayData] = await Promise.all([
             api.get('/auth/profile'),
-            api.get('/timetable/faculty/today'),
-            api.get('/timetable')
+            api.get('/analytics/faculty-stats'),
+            api.get('/timetable/faculty/today')
         ]);
 
         currentUser = profileData.user;
         document.getElementById('userName').textContent = currentUser.name;
         
-        let uniqueSubjectsMap = new Map();
-        if (weekData && weekData.timetables) {
-            weekData.timetables.filter(t => t.faculty && t.faculty._id === currentUser._id).forEach(t => {
-                if (t.subject && t.subject._id) {
-                    uniqueSubjectsMap.set(t.subject._id, t.subject);
-                }
-            });
-        }
+        // Use optimized stats data for display
+        document.getElementById('assignedSubjects').textContent = statsData.assignedSubjectsCount || '0';
+        document.getElementById('todayPeriods').textContent = statsData.todayPeriodsCount || '0';
         
-        if (!currentUser.assignedSubjects || currentUser.assignedSubjects.length === 0) {
-            currentUser.assignedSubjects = Array.from(uniqueSubjectsMap.values());
+        const weekClassesElem = document.getElementById('weekClasses');
+        if (weekClassesElem) {
+            weekClassesElem.textContent = statsData.weekClassesCount || '0';
         }
 
-        document.getElementById('assignedSubjects').textContent = currentUser.assignedSubjects ? currentUser.assignedSubjects.length : 0;
-        
         const schedule = (todayData && todayData.schedule) ? todayData.schedule : (todayData && todayData.timetables) ? todayData.timetables : [];
-        document.getElementById('todayPeriods').textContent = schedule.length;
-
         renderTodayTimetable(schedule);
     } catch (error) {
         console.error('Error loading initial data:', error);
@@ -229,34 +221,20 @@ async function loadInitialData() {
 
 async function loadOverviewData() {
     try {
-        const todayData = await api.get('/timetable/faculty/today');
+        const [statsData, todayData, weekData] = await Promise.all([
+            api.get('/analytics/faculty-stats'),
+            api.get('/timetable/faculty/today'),
+            api.get('/timetable?facultyId=' + currentUser._id)
+        ]);
+
         const schedule = (todayData && todayData.schedule) ? todayData.schedule : (todayData && todayData.timetables) ? todayData.timetables : [];
-        document.getElementById('todayPeriods').textContent = schedule.length;
+        document.getElementById('todayPeriods').textContent = statsData.todayPeriodsCount || '0';
         renderTodayTimetable(schedule);
 
-        const weekData = await api.get('/timetable');
+        document.getElementById('weekClasses').textContent = statsData.weekClassesCount || '0';
+        document.getElementById('assignedSubjects').textContent = statsData.assignedSubjectsCount || '0';
+
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        let weekCount = 0;
-        
-        let uniqueSubjectsMap = new Map();
-        if (weekData && weekData.timetables) {
-            days.forEach(day => {
-                weekCount += weekData.timetables.filter(t => t.faculty && t.faculty._id === currentUser._id && t.day === day).length;
-            });
-            weekData.timetables.filter(t => t.faculty && t.faculty._id === currentUser._id).forEach(t => {
-                if (t.subject && t.subject._id) {
-                    uniqueSubjectsMap.set(t.subject._id, t.subject);
-                }
-            });
-        }
-        
-        if (!currentUser.assignedSubjects || currentUser.assignedSubjects.length === 0) {
-            currentUser.assignedSubjects = Array.from(uniqueSubjectsMap.values());
-        }
-
-        document.getElementById('weekClasses').textContent = weekCount;
-        document.getElementById('assignedSubjects').textContent = currentUser.assignedSubjects ? currentUser.assignedSubjects.length : 0;
-
         renderWeeklyClassesChart((weekData && weekData.timetables) ? weekData.timetables : [], days);
         await renderAttendanceOverviewChart();
     } catch (error) {
@@ -324,18 +302,17 @@ async function renderAttendanceOverviewChart() {
         const today = new Date().toISOString().split('T')[0];
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         
-        const attendanceData = await api.get(`/attendance?startDate=${weekAgo}&endDate=${today}`);
+        // Fetch specific attendance marked by this faculty across all their classes
+        const attendanceData = await api.get(`/attendance?startDate=${weekAgo}&endDate=${today}&facultyId=${currentUser._id}`);
         
-        const myAttendance = attendanceData.attendances.filter(a => 
-            a.faculty && a.faculty._id === currentUser._id
-        );
+        const myAttendance = attendanceData.attendances || [];
         
         let totalPresent = 0;
         let totalAbsent = 0;
         
         myAttendance.forEach(a => {
             if (a.status === 'present') totalPresent++;
-            else totalAbsent++;
+            else if (a.status === 'absent') totalAbsent++;
         });
 
         attendanceOverviewChart = new Chart(ctx, {

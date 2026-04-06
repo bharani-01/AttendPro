@@ -381,24 +381,25 @@ const attendanceController = {
 
   async getAttendance(req, res) {
     try {
-      const { studentId, subjectId, classId, startDate, endDate } = req.query;
+      const { studentId, subjectId, classId, startDate, endDate, facultyId } = req.query;
       const query = {};
 
       if (req.user.role === 'faculty') {
-        if (!req.user.assignedClass) {
-          return res.status(403).json({ error: 'Faculty account has no assigned class.' });
+        const queryClass = classId || req.user.assignedClass;
+        if (queryClass) {
+          query.class = queryClass;
         }
-
-        if (classId && String(classId) !== String(req.user.assignedClass)) {
-          return res.status(403).json({ error: 'You can only query attendance for your assigned class.' });
+        
+        // If they specifically want their own markings
+        if (facultyId) {
+          query.markedBy = facultyId;
         }
-
-        query.class = req.user.assignedClass;
       }
 
       if (studentId) query.student = studentId;
       if (subjectId) query.subject = subjectId;
       if (classId && req.user.role !== 'faculty') query.class = classId;
+      if (facultyId && req.user.role !== 'faculty') query.markedBy = facultyId;
       if (startDate || endDate) {
         query.date = {};
         if (startDate) query.date.$gte = new Date(startDate);

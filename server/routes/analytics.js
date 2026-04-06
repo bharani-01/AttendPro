@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Attendance, User, QRSession, Class } = require('../models');
+const { Attendance, User, QRSession, Class, Timetable } = require('../models');
 const { auth, roleCheck } = require('../middleware/auth');
 
 router.get('/summary', auth, async (req, res) => {
@@ -87,6 +87,42 @@ router.get('/by-student', auth, roleCheck('admin', 'faculty'), async (req, res) 
     ]);
 
     res.json({ students: byStudent });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/faculty-stats', auth, roleCheck('faculty'), async (req, res) => {
+  try {
+    const facultyId = req.user._id;
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const today = days[new Date().getDay()];
+
+    const [todayCount, weekTimetables, faculty] = await Promise.all([
+      Timetable.countDocuments({ faculty: facultyId, day: today }),
+      Timetable.find({ faculty: facultyId }).populate('subject', 'subjectName'),
+      User.findById(facultyId).populate('assignedSubjects')
+    ]);
+
+    const uniqueSubjectsMap = new Map();
+    weekTimetables.forEach(t => {
+      if (t.subject && t.subject._id) {
+        uniqueSubjectsMap.set(t.subject._id.toString(), t.subject);
+      }
+    });
+
+    let assignedSubjects = faculty.assignedSubjects || [];
+    if (assignedSubjects.length === 0) {
+      assignedSubjects = Array.from(uniqueSubjectsMap.values());
+    }
+
+    const weekCount = weekTimetables.filter(t => days.includes(t.day) && t.day !== 'Sunday').length;
+
+    res.json({
+      assignedSubjectsCount: assignedSubjects.length,
+      todayPeriodsCount: todayCount,
+      weekClassesCount: weekCount
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
