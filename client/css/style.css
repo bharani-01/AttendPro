@@ -779,12 +779,22 @@ body {
     transition: all 0.2s;
     font-weight: 500;
     font-size: 0.9rem;
+    min-height: 40px;
+    line-height: 1.25;
 }
 
 .nav-link svg {
     width: 18px;
     height: 18px;
     flex-shrink: 0;
+}
+
+.nav-link-label {
+    min-width: 0;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .nav-link:hover {
@@ -2801,6 +2811,58 @@ tbody tr:last-child td {
     font-size: 0.875rem;
 }
 
+/* Faculty analytics section */
+#analytics .analytics-filters {
+    background: var(--white);
+    padding: 16px;
+    border-radius: 14px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(150px, 1fr));
+    gap: 10px;
+    align-items: center;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray-200);
+}
+
+#analytics .analytics-filters select,
+#analytics .analytics-filters input[type="date"] {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    background: var(--white);
+    color: var(--dark);
+}
+
+#analytics .analytics-filters select:focus,
+#analytics .analytics-filters input[type="date"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+#analytics .analytics-filters .btn {
+    width: 100%;
+    min-height: 40px;
+    white-space: nowrap;
+    padding: 10px 14px;
+}
+
+#analytics .analytics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+#analytics .analytics-summary .stat-card {
+    height: 100%;
+}
+
 /* Audit Log Styles */
 .audit-filters {
     background: var(--white);
@@ -2957,6 +3019,10 @@ tbody tr:last-child td {
     .charts-grid {
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
+
+    #analytics .analytics-filters {
+        grid-template-columns: repeat(2, minmax(160px, 1fr));
+    }
 }
 
 @media (max-width: 768px) {
@@ -3013,6 +3079,10 @@ tbody tr:last-child td {
     .report-filters > *, 
     .history-filters > * {
         width: 100%;
+    }
+
+    #analytics .analytics-filters {
+        grid-template-columns: 1fr;
     }
 
     .student-item {

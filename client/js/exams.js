@@ -12,27 +12,75 @@ const EXAM_STAGE_PAGES = {
     confirm: 'exams-confirm.html'
 };
 
+const NAV_ICONS = {
+    dashboard: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+    students: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>',
+    faculty: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>',
+    classes: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>',
+    departments: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18"/><path d="M3 12h18"/><path d="M3 17h18"/></svg>',
+    subjects: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>',
+    timetable: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+    reports: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+    marks: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
+    schedule: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+    users: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>',
+    audit: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    security: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 5-3.5 8-8 8s-8-3-8-8V7l8-4z"/><path d="M9 12l2 2 4-4"/></svg>',
+    settings: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 5 15a1.65 1.65 0 0 0-1.51-1H3.4a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 5 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9.32 3h.18A1.65 1.65 0 0 0 11 1.49V1.4a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 16 3h.18a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20 8v.18A1.65 1.65 0 0 0 21.51 10h.09a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 20 15z"/></svg>',
+    attendance: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
+    daily: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    leave: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    qrcode: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+    analytics: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+    history: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    announcements: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',
+    messages: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
+    logout: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
+};
+
 const NAV_ITEMS = {
     admin: [
-        { href: 'admin-dashboard.html', label: 'Dashboard' },
-        { href: 'admin-exams.html', label: 'Exams & Marks' },
-        { href: 'exams.html', label: 'Exam Schedule', active: true },
-        { href: 'announcements.html', label: 'Announcements' },
-        { href: 'messages.html', label: 'Messages' }
+        { href: 'admin-dashboard.html', label: 'Dashboard', icon: 'dashboard' },
+        { href: 'admin-dashboard.html?page=students', label: 'Students', icon: 'students' },
+        { href: 'admin-dashboard.html?page=faculty', label: 'Faculty', icon: 'faculty' },
+        { href: 'admin-dashboard.html?page=classes', label: 'Classes', icon: 'classes' },
+        { href: 'admin-dashboard.html?page=departments', label: 'Departments', icon: 'departments' },
+        { href: 'admin-dashboard.html?page=subjects', label: 'Subjects', icon: 'subjects' },
+        { href: 'admin-dashboard.html?page=timetable', label: 'Timetable', icon: 'timetable' },
+        { href: 'admin-dashboard.html?page=reports', label: 'Reports', icon: 'reports' },
+        { href: 'admin-exams.html', label: 'Exams & Marks', icon: 'marks' },
+        { href: 'exams.html', label: 'Exam Schedule', icon: 'schedule', active: true },
+        { href: 'admin-dashboard.html?page=users', label: 'Manage Users', icon: 'users' },
+        { href: 'admin-dashboard.html?page=audit', label: 'Audit Logs', icon: 'audit' },
+        { href: 'admin-dashboard.html?page=security', label: 'Security', icon: 'security' },
+        { href: 'admin-dashboard.html?page=settings', label: 'Settings', icon: 'settings' },
+        { href: 'messages.html', label: 'Messages', icon: 'messages' },
+        { href: 'announcements.html', label: 'Announcements', icon: 'announcements' }
     ],
     faculty: [
-        { href: 'faculty-dashboard.html', label: 'Dashboard' },
-        { href: 'faculty-marks.html', label: 'Enter Marks' },
-        { href: 'exams.html', label: 'Exam Schedule', active: true },
-        { href: 'announcements.html', label: 'Announcements' },
-        { href: 'messages.html', label: 'Messages' }
+        { href: 'faculty-dashboard.html', label: 'Dashboard', icon: 'dashboard' },
+        { href: 'faculty-dashboard.html?page=timetable', label: 'My Timetable', icon: 'timetable' },
+        { href: 'faculty-dashboard.html?page=mark', label: 'Mark Attendance', icon: 'marks' },
+        { href: 'faculty-dashboard.html?page=history', label: 'Attendance History', icon: 'history' },
+        { href: 'faculty-dashboard.html?page=qrcode', label: 'QR Code Check-in', icon: 'qrcode' },
+        { href: 'faculty-dashboard.html?page=analytics', label: 'Analytics', icon: 'analytics' },
+        { href: 'faculty-dashboard.html?page=leaves', label: 'Leave Requests', icon: 'leave' },
+        { href: 'faculty-marks.html', label: 'Enter Marks', icon: 'marks' },
+        { href: 'exams.html', label: 'Exam Schedule', icon: 'schedule', active: true },
+        { href: 'announcements.html', label: 'Announcements', icon: 'announcements' },
+        { href: 'messages.html', label: 'Messages', icon: 'messages' }
     ],
     student: [
-        { href: 'student-dashboard.html', label: 'Dashboard' },
-        { href: 'student-marks.html', label: 'My Marks' },
-        { href: 'exams.html', label: 'Exam Schedule', active: true },
-        { href: 'announcements.html', label: 'Announcements' },
-        { href: 'messages.html', label: 'Messages' }
+        { href: 'student-dashboard.html', label: 'Dashboard', icon: 'dashboard' },
+        { href: 'student-dashboard.html?page=attendance', label: 'My Attendance', icon: 'attendance' },
+        { href: 'student-dashboard.html?page=daily', label: 'Daily Logs', icon: 'daily' },
+        { href: 'student-dashboard.html?page=timetable', label: 'Timetable', icon: 'timetable' },
+        { href: 'student-dashboard.html?page=leave', label: 'Leave Request', icon: 'leave' },
+        { href: 'student-dashboard.html?page=checkin', label: 'QR Check-in', icon: 'qrcode' },
+        { href: 'student-marks.html', label: 'My Marks', icon: 'marks' },
+        { href: 'exams.html', label: 'Exam Schedule', icon: 'schedule', active: true },
+        { href: 'announcements.html', label: 'Announcements', icon: 'announcements' },
+        { href: 'messages.html', label: 'Messages', icon: 'messages' }
     ]
 };
 
@@ -105,9 +153,19 @@ function renderRoleNavigation(role) {
     badge.textContent = role.charAt(0).toUpperCase() + role.slice(1);
 
     menu.innerHTML = items.map((item) => `
-        <li><a href="${item.href}" class="nav-link ${item.active ? 'active' : ''}">${item.label}</a></li>
+        <li>
+            <a href="${item.href}" class="nav-link ${item.active ? 'active' : ''}">
+                ${NAV_ICONS[item.icon] || ''}
+                <span class="nav-link-label">${item.label}</span>
+            </a>
+        </li>
     `).join('') + `
-        <li><a href="#" class="nav-link logout" id="logoutBtn">Logout</a></li>
+        <li>
+            <a href="#" class="nav-link logout" id="logoutBtn">
+                ${NAV_ICONS.logout}
+                <span class="nav-link-label">Logout</span>
+            </a>
+        </li>
     `;
 }
 
